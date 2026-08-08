@@ -1,0 +1,42 @@
+.lesson-create-page { min-height: 100vh; background: #fafbff; color: #111225; }
+.lesson-create-topbar { height: 70px; display: flex; align-items: center; justify-content: space-between; padding-inline: max(24px, calc((100vw - 1060px) / 2)); border-bottom: 1px solid #e4e8f1; background: white; }
+.lesson-create-topbar > span { color: #5b6883; font-size: 12px; font-weight: 600; }
+.lesson-create-brand { display: flex; align-items: center; gap: 9px; color: #17182a; font-size: 18px; font-weight: 720; letter-spacing: -.02em; }
+.lesson-create-brand svg { color: var(--primary); }
+.lesson-create-content { width: min(880px, calc(100% - 40px)); margin-inline: auto; padding-block: 38px 70px; }
+.lesson-back-link { width: fit-content; display: flex; align-items: center; gap: 7px; color: #52617d; font-size: 12px; font-weight: 550; }
+.lesson-back-link:hover { color: var(--primary); }
+.lesson-create-heading { display: flex; align-items: flex-start; gap: 16px; margin-top: 35px; }
+.lesson-create-heading-icon { width: 45px; height: 45px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 12px; color: var(--primary); background: #f0edff; }
+.lesson-create-heading p { margin: 1px 0 7px; color: var(--primary); font-size: 11px; font-weight: 700; }
+.lesson-create-heading h1 { max-width: 760px; margin: 0; overflow-wrap: anywhere; font-size: 30px; line-height: 1.15; letter-spacing: -.025em; }
+.lesson-create-heading span { display: block; margin-top: 10px; color: #5c6880; font-size: 13px; }
+.lesson-setup-panel { margin-top: 32px; padding: 24px; border: 1px solid #e1e5ee; border-radius: 14px; background: white; }
+.lesson-setup-title { display: flex; align-items: flex-start; gap: 12px; }
+.lesson-setup-title > div:first-child { width: 31px; height: 31px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 9px; color: #0a9f5b; background: #e8faef; }
+.lesson-setup-title h2 { margin: 0; font-size: 15px; }
+.lesson-setup-title p { margin: 5px 0 0; color: #5b6881; font-size: 11px; }
+.lesson-detail-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 24px 0 0; }
+.lesson-detail-list > div { min-width: 0; padding: 14px; border: 1px solid #e8ebf2; border-radius: 10px; background: #fcfcff; }
+.lesson-detail-list dt { color: #68758e; font-size: 9px; font-weight: 650; text-transform: uppercase; }
+.lesson-detail-list dd { margin: 8px 0 0; overflow: hidden; color: #1b2338; font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.lesson-generator-notice { margin-top: 20px; padding-top: 17px; border-top: 1px solid #eceef4; color: #68758d; font-size: 11px; }
+.lesson-create-empty { width: min(460px, calc(100% - 40px)); margin: 120px auto 0; text-align: center; }
+.lesson-create-empty-icon { width: 52px; height: 52px; display: grid; place-items: center; margin-inline: auto; border-radius: 14px; color: var(--primary); background: #f0edff; }
+.lesson-create-empty h1 { margin: 20px 0 0; font-size: 24px; letter-spacing: -.02em; }
+.lesson-create-empty p { margin: 10px auto 0; color: #5c6881; line-height: 1.6; }
+.lesson-create-empty a { width: fit-content; height: 40px; display: flex; align-items: center; gap: 8px; margin: 24px auto 0; padding-inline: 15px; border: 1px solid #dedfea; border-radius: 8px; color: var(--primary); background: white; font-weight: 650; }
+
+@media (max-width: 700px) {
+  .lesson-create-topbar { padding-inline: 18px; }
+  .lesson-create-content { width: min(100% - 28px, 880px); padding-top: 25px; }
+  .lesson-create-heading { margin-top: 28px; }
+  .lesson-create-heading h1 { font-size: 24px; }
+  .lesson-setup-panel { padding: 18px; }
+  .lesson-detail-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 420px) {
+  .lesson-create-topbar > span { display: none; }
+  .lesson-detail-list { grid-template-columns: 1fr; }
+}
