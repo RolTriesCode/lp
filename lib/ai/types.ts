@@ -12,6 +12,7 @@ export type AICapability =
   | "fast_text_rewrite"
   | "assessment_generation"
   | "worksheet_generation"
+  | "rubric_generation"
   | "presentation_generation";
 
 /**

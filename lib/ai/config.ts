@@ -57,6 +57,7 @@ export function resolveProviderForCapability(
       return config.cerebrasApiKey ? "cerebras" : config.groqApiKey ? "groq" : "openrouter";
     case "assessment_generation":
     case "worksheet_generation":
+    case "rubric_generation":
     case "presentation_generation":
       return config.groqApiKey ? "groq" : "openrouter";
     default:

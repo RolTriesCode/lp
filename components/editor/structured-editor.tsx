@@ -121,10 +121,15 @@ export function StructuredEditor() {
     <div className="lesson-create-container" style={{ maxWidth: "1280px" }}>
       {/* Top Header Navigation */}
       <div className="lesson-create-header-nav">
-        <Link className="lesson-back-btn" href="/lesson/create">
-          <ArrowLeft aria-hidden="true" size={16} />
-          <span>Back to Generator</span>
-        </Link>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <Link className="lesson-back-btn" href="/lesson/create">
+            <ArrowLeft aria-hidden="true" size={16} />
+            <span>Back to Generator</span>
+          </Link>
+          <Link className="lesson-back-btn" href={`/lesson/${activeLesson.id}/pack`}>
+            <span>Teaching Pack</span>
+          </Link>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           {isDirty ? (
             <span

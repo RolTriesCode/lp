@@ -7,6 +7,7 @@ import {
   FilePenLine,
   MoreVertical,
   Trash2,
+  Layers,
 } from "lucide-react";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -14,11 +15,12 @@ import { useLessonStore } from "@/stores/lesson-store";
 import type { LessonPlan } from "@/schemas/lesson";
 import { mockLessonPlans } from "@/lib/mock-lessons";
 
-function LessonActions({ lesson, onOpen, onDuplicate, onDelete }: {
+function LessonActions({ lesson, onOpen, onDuplicate, onDelete, onPack }: {
   lesson: LessonPlan | any;
   onOpen: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onPack: () => void;
 }) {
   return (
     <DropdownMenu.Root>
@@ -41,6 +43,10 @@ function LessonActions({ lesson, onOpen, onDuplicate, onDelete }: {
           <DropdownMenu.Item className="lesson-menu-item" onClick={onOpen}>
             <ExternalLink aria-hidden="true" size={14} strokeWidth={1.8} />
             Open Editor
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="lesson-menu-item" onClick={onPack}>
+            <Layers aria-hidden="true" size={14} strokeWidth={1.8} />
+            Teaching Pack
           </DropdownMenu.Item>
           <DropdownMenu.Item className="lesson-menu-item" onClick={onDuplicate}>
             <Copy aria-hidden="true" size={14} strokeWidth={1.8} />
@@ -133,6 +139,7 @@ export function RecentLessonPlans() {
                   onOpen={() => router.push(`/lesson/${lesson.id}`)}
                   onDuplicate={() => handleDuplicate(lesson.id!)}
                   onDelete={() => handleDelete(lesson.id!, lesson.title)}
+                  onPack={() => router.push(`/lesson/${lesson.id}/pack`)}
                 />
               </div>
             </div>

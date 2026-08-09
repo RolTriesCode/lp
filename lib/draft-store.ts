@@ -14,17 +14,23 @@ import {
   WorksheetSchema,
   type Worksheet,
 } from "@/schemas/worksheet";
+import {
+  RubricSchema,
+  type Rubric,
+} from "@/schemas/rubric";
 
 const DRAFT_STORAGE_KEY = "aralai_lesson_drafts";
 const PRESENTATION_DRAFT_KEY = "aralai_presentation_drafts";
 const ASSESSMENT_DRAFT_KEY = "aralai_assessment_drafts";
 const WORKSHEET_DRAFT_KEY = "aralai_worksheet_drafts";
+const RUBRIC_DRAFT_KEY = "aralai_rubric_drafts";
 
 // In-memory cache for fast client/server-side retrieval within process lifetime
 const draftCache = new Map<string, LessonPlan>();
 const presentationCache = new Map<string, Presentation>();
 const assessmentCache = new Map<string, Assessment>();
 const worksheetCache = new Map<string, Worksheet>();
+const rubricCache = new Map<string, Rubric>();
 
 /**
  * Saves a generated or edited LessonPlan draft.
@@ -253,6 +259,54 @@ export function getDraftWorksheet(lessonId: string): Worksheet | null {
         if (existingMap[lessonId]) {
           const parsed = WorksheetSchema.parse(existingMap[lessonId]);
           worksheetCache.set(lessonId, parsed);
+          return parsed;
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Saves a rubric draft linked to a lesson ID.
+ */
+export function saveDraftRubric(rubric: Rubric): void {
+  const lessonId = rubric.lessonId;
+  rubricCache.set(lessonId, rubric);
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const existingRaw = window.localStorage.getItem(RUBRIC_DRAFT_KEY);
+      const existingMap: Record<string, Rubric> = existingRaw ? JSON.parse(existingRaw) : {};
+      existingMap[lessonId] = rubric;
+      window.localStorage.setItem(RUBRIC_DRAFT_KEY, JSON.stringify(existingMap));
+    } catch {
+      // Ignore errors
+    }
+  }
+}
+
+/**
+ * Retrieves a rubric draft by parent lesson ID.
+ */
+export function getDraftRubric(lessonId: string): Rubric | null {
+  if (!lessonId) return null;
+
+  if (rubricCache.has(lessonId)) {
+    return rubricCache.get(lessonId)!;
+  }
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    try {
+      const existingRaw = window.localStorage.getItem(RUBRIC_DRAFT_KEY);
+      if (existingRaw) {
+        const existingMap: Record<string, Rubric> = JSON.parse(existingRaw);
+        if (existingMap[lessonId]) {
+          const parsed = RubricSchema.parse(existingMap[lessonId]);
+          rubricCache.set(lessonId, parsed);
           return parsed;
         }
       }
