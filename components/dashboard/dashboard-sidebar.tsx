@@ -32,40 +32,53 @@ type SidebarSection = {
   items: SidebarItem[];
 };
 
-const sidebarSections: SidebarSection[] = [
-  {
-    items: [
-      { label: "Dashboard", icon: House, href: "/dashboard", active: true },
-    ],
-  },
-  {
-    label: "CREATE",
-    items: [
-      { label: "New Lesson Plan", icon: FilePlus2, accent: "#5736f5", href: "#lesson-plan-composer" },
-      { label: "Presentation Maker", icon: Presentation, accent: "#ff4f7b" },
-      { label: "Assessment Builder", icon: ClipboardCheck, accent: "#18c87a" },
-      { label: "Worksheet Generator", icon: FileCheck2, accent: "#ff9f1c" },
-      { label: "Rubric Builder", icon: Target, accent: "#9a71f7" },
-    ],
-  },
-  {
-    label: "MANAGE",
-    items: [
-      { label: "My Lesson Plans", icon: Files },
-      { label: "Templates", icon: FolderOpen },
-      { label: "Resources", icon: BookOpen },
-      { label: "Calendar", icon: CalendarDays },
-    ],
-  },
-  {
-    label: "SETTINGS",
-    items: [
-      { label: "School & Profile", icon: GraduationCap },
-      { label: "Preferences", icon: Settings },
-      { label: "Help Center", icon: CircleHelp },
-    ],
-  },
-];
+export function getSidebarSections(currentPath: string = "/dashboard"): SidebarSection[] {
+  return [
+    {
+      items: [
+        {
+          label: "Dashboard",
+          icon: House,
+          href: "/dashboard",
+          active: currentPath === "/dashboard",
+        },
+      ],
+    },
+    {
+      label: "CREATE",
+      items: [
+        {
+          label: "New Lesson Plan",
+          icon: FilePlus2,
+          accent: "#5736f5",
+          href: "/lesson/create",
+          active: currentPath.startsWith("/lesson/create"),
+        },
+        { label: "Presentation Maker", icon: Presentation, accent: "#ff4f7b" },
+        { label: "Assessment Builder", icon: ClipboardCheck, accent: "#18c87a" },
+        { label: "Worksheet Generator", icon: FileCheck2, accent: "#ff9f1c" },
+        { label: "Rubric Builder", icon: Target, accent: "#9a71f7" },
+      ],
+    },
+    {
+      label: "MANAGE",
+      items: [
+        { label: "My Lesson Plans", icon: Files },
+        { label: "Templates", icon: FolderOpen },
+        { label: "Resources", icon: BookOpen },
+        { label: "Calendar", icon: CalendarDays },
+      ],
+    },
+    {
+      label: "SETTINGS",
+      items: [
+        { label: "School & Profile", icon: GraduationCap },
+        { label: "Preferences", icon: Settings },
+        { label: "Help Center", icon: CircleHelp },
+      ],
+    },
+  ];
+}
 
 function NavigationItem({ item }: { item: SidebarItem }) {
   const Icon = item.icon;
@@ -102,10 +115,12 @@ function NavigationItem({ item }: { item: SidebarItem }) {
   return <button className={className} type="button">{content}</button>;
 }
 
-export function SidebarNavigation() {
+export function SidebarNavigation({ currentPath = "/dashboard" }: { currentPath?: string }) {
+  const sections = getSidebarSections(currentPath);
+
   return (
     <nav aria-label="Dashboard navigation">
-      {sidebarSections.map((section) => (
+      {sections.map((section) => (
         <div
           className={section.label ? "sidebar-group" : "sidebar-home"}
           key={section.label ?? "home"}
@@ -137,10 +152,10 @@ function TemplatePromotion() {
   );
 }
 
-export function DashboardSidebar() {
+export function DashboardSidebar({ currentPath = "/dashboard" }: { currentPath?: string }) {
   return (
     <aside className="sidebar">
-      <SidebarNavigation />
+      <SidebarNavigation currentPath={currentPath} />
       <TemplatePromotion />
     </aside>
   );

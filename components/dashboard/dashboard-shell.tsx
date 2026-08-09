@@ -2,6 +2,7 @@ import {
   ArrowRight, BookMarked, Bot, Hand, MessageCircleMore,
   SquarePen, Target, UsersRound,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { DashboardHeader } from "./dashboard-header";
 import { DashboardContent } from "./dashboard-motion";
 import { DashboardSidebar, SidebarNavigation } from "./dashboard-sidebar";
@@ -37,6 +38,42 @@ function WeekSchedule() {
   return <section className="schedule panel"><div className="section-heading"><h2>This Week&apos;s Schedule</h2><button type="button">View Calendar</button></div><div className="schedule-list">{schedule.map(([day, date, title, grade, subject, action]) => <div className="schedule-item" key={date}><div className="schedule-date"><span>{day}</span><strong>{date}</strong></div><div className="schedule-copy"><strong>{title}</strong><span>{grade}{subject && <> <b>•</b> {subject}</>}</span></div><span className={`schedule-action ${action.toLowerCase()}`}>{action}</span></div>)}</div><button className="calendar-link" type="button">View full calendar <ArrowRight size={17} /></button></section>;
 }
 
-export function DashboardShell() {
-  return <div className="dashboard-shell"><DashboardHeader mobileNavigation={<SidebarNavigation />} /><DashboardSidebar /><DashboardContent><div className="dashboard-primary-layout"><div className="dashboard-primary"><div className="intro-row"><div><h1>Good morning, Ma&apos;am! <Hand aria-hidden="true" /></h1><p>What are we teaching today?</p></div><QuoteCard /></div><LessonPlanComposer /></div><AssistantPanel /></div><QuickActions /><div className="lower-grid"><RecentLessonPlans /><WeekSchedule /></div></DashboardContent></div>;
+type DashboardShellProps = {
+  children?: ReactNode;
+  currentPath?: string;
+};
+
+export function DashboardShell({ children, currentPath = "/dashboard" }: DashboardShellProps) {
+  return (
+    <div className="dashboard-shell">
+      <DashboardHeader mobileNavigation={<SidebarNavigation currentPath={currentPath} />} />
+      <DashboardSidebar currentPath={currentPath} />
+      <DashboardContent>
+        {children ? (
+          children
+        ) : (
+          <>
+            <div className="dashboard-primary-layout">
+              <div className="dashboard-primary">
+                <div className="intro-row">
+                  <div>
+                    <h1>Good morning, Ma&apos;am! <Hand aria-hidden="true" /></h1>
+                    <p>What are we teaching today?</p>
+                  </div>
+                  <QuoteCard />
+                </div>
+                <LessonPlanComposer />
+              </div>
+              <AssistantPanel />
+            </div>
+            <QuickActions />
+            <div className="lower-grid">
+              <RecentLessonPlans />
+              <WeekSchedule />
+            </div>
+          </>
+        )}
+      </DashboardContent>
+    </div>
+  );
 }

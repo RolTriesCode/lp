@@ -1,0 +1,307 @@
+/* Slide Preview Workspace Styling */
+.presentation-workspace {
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  gap: 20px;
+  align-items: flex-start;
+  margin-top: 20px;
+}
+
+/* Left Panel: Slide Thumbnail Rail */
+.slide-thumbnail-rail {
+  border: 1px solid #e1e5ee;
+  border-radius: 12px;
+  background: white;
+  padding: 14px;
+  position: sticky;
+  top: 80px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+
+.thumbnail-list {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.thumbnail-card {
+  position: relative;
+  aspect-ratio: 16/9;
+  border: 2px solid #e1e5ee;
+  border-radius: 8px;
+  background: #fafafc;
+  padding: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.16s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.thumbnail-card:hover {
+  border-color: #5637f5;
+  box-shadow: 0 2px 6px rgba(86, 55, 245, 0.08);
+}
+
+.thumbnail-card.active {
+  border-color: #5637f5;
+  background: #f7f5ff;
+}
+
+.thumbnail-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #1a2238;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thumbnail-number {
+  font-size: 9px;
+  font-weight: 800;
+  color: #7b88a2;
+  text-transform: uppercase;
+}
+
+.thumbnail-badge {
+  font-size: 8px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #edf0f6;
+  color: #4a5874;
+  font-weight: 700;
+  align-self: flex-start;
+}
+
+/* Center Panel: Widescreen Slide Canvas */
+.slide-canvas-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.slide-canvas-container {
+  aspect-ratio: 16/9;
+  border: 1px solid #dde2ec;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(19, 33, 68, 0.04);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Theme Design Tokens */
+
+/* Theme: Minimal */
+.theme-minimal {
+  background: white;
+  color: #1e293b;
+  font-family: system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px;
+  height: 100%;
+}
+
+.theme-minimal h2 {
+  font-size: 24px;
+  font-weight: 700;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 8px;
+  margin: 0 0 16px;
+}
+
+/* Theme: Classroom */
+.theme-classroom {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+  color: #2e1065;
+  font-family: "Outfit", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px;
+  height: 100%;
+  border: 4px solid #c084fc;
+}
+
+.theme-classroom h2 {
+  font-size: 26px;
+  font-weight: 850;
+  color: #5b21b6;
+  margin: 0 0 16px;
+}
+
+/* Theme: Academic */
+.theme-academic {
+  background: #fbfbfa;
+  color: #1c1917;
+  font-family: Georgia, serif;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px;
+  height: 100%;
+  border-top: 10px solid #1e3a8a;
+}
+
+.theme-academic h2 {
+  font-size: 25px;
+  font-weight: 600;
+  color: #1e3a8a;
+  font-style: italic;
+  margin: 0 0 16px;
+}
+
+/* Theme: Elementary */
+.theme-elementary {
+  background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+  color: #78350f;
+  font-family: "Inter", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px;
+  height: 100%;
+  border: 4px dashed #f59e0b;
+  border-radius: 8px;
+}
+
+.theme-elementary h2 {
+  font-size: 26px;
+  font-weight: 800;
+  color: #d97706;
+  margin: 0 0 16px;
+}
+
+/* Theme: Science */
+.theme-science {
+  background: #0f172a;
+  color: #f1f5f9;
+  font-family: system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px;
+  height: 100%;
+  border-left: 10px solid #06b6d4;
+}
+
+.theme-science h2 {
+  font-size: 26px;
+  font-weight: 700;
+  color: #22d3ee;
+  margin: 0 0 16px;
+}
+
+/* Theme: Mathematics */
+.theme-mathematics {
+  background: #fafaf9;
+  color: #292524;
+  font-family: "Outfit", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px;
+  height: 100%;
+  background-image: radial-gradient(#e7e5e4 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.theme-mathematics h2 {
+  font-size: 25px;
+  font-weight: 800;
+  color: #dc2626;
+  margin: 0 0 16px;
+}
+
+/* Layout Specific Slide Formats */
+
+.layout-title {
+  text-align: center;
+  align-items: center;
+}
+
+.layout-title h2 {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.layout-title p {
+  font-size: 16px;
+  color: #7b88a2;
+}
+
+.layout-bullets ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 24px;
+  font-size: 14px;
+}
+
+.layout-two_column {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.layout-quote {
+  text-align: center;
+  font-style: italic;
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.layout-big_stat {
+  text-align: center;
+}
+
+.layout-big_stat .stat-number {
+  font-size: 48px;
+  font-weight: 800;
+  color: #5637f5;
+}
+
+.layout-interactive_qa {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* Right Panel: slide editor controls */
+.slide-editor-controls {
+  border: 1px solid #e1e5ee;
+  border-radius: 12px;
+  background: white;
+  padding: 16px;
+  position: sticky;
+  top: 80px;
+}
+
+@media (max-width: 1080px) {
+  .presentation-workspace {
+    grid-template-columns: 200px 1fr;
+  }
+  .slide-editor-controls {
+    grid-column: span 2;
+    position: static;
+  }
+}
+
+@media (max-width: 860px) {
+  .presentation-workspace {
+    grid-template-columns: 1fr;
+  }
+  .slide-thumbnail-rail {
+    position: static;
+    max-height: none;
+  }
+  .slide-editor-controls {
+    grid-column: span 1;
+  }
+}
