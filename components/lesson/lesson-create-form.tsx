@@ -7,16 +7,30 @@ import {
   CheckCircle2,
   Clock,
   Layers,
+  Paperclip,
   Sparkles,
   Target,
   Wand2,
+  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { requestLessonGeneration } from "@/lib/ai/generate-client";
-import { saveDraftLesson } from "@/lib/draft-store";
+import { defaultStorageAdapter } from "@/lib/persistence/remote-adapter";
+import { defaultResourceRepository } from "@/lib/resources/repository";
+import { defaultTemplateRepository } from "@/lib/templates/repository";
+import { defaultClassroomContextRepository } from "@/lib/classroom-context/repository";
+import { curriculumRecordMatchesLessonInput } from "@/lib/curriculum/adapter";
+import type { CurriculumRecord } from "@/lib/curriculum/types";
+import { toUploadedReference } from "@/schemas/resource";
+import { MAX_REFERENCE_DOCUMENTS } from "@/schemas/reference";
+import {
+  LessonTemplateApplicationSchema,
+  applyTemplateToLessonForm,
+  type LessonTemplate,
+} from "@/schemas/template";
 import {
   classSizeOptions,
   curriculumOptions,
@@ -31,22 +45,43 @@ import {
   type LessonPlanFormValues,
 } from "@/lib/lesson-plan-schema";
 import { GenerationStatusRegion } from "./generation-status";
+import { ReferenceUpload } from "./reference-upload";
+import type { ClassroomContextApplication } from "@/schemas/classroom-context";
+import { BloomTaxonomyLevelSchema, type BloomTaxonomyLevel } from "@/schemas/pedagogy";
+import { trackProductEvent } from "@/lib/monitoring/analytics";
 
 type LessonCreateFormProps = {
+  initialCurriculumRecord?: CurriculumRecord;
   initialValues: LessonPlanFormValues;
+  initialResourceId?: string;
+  initialTemplateId?: string;
 };
 
-export function LessonCreateForm({ initialValues }: LessonCreateFormProps) {
+export function LessonCreateForm({
+  initialCurriculumRecord,
+  initialValues,
+  initialResourceId,
+  initialTemplateId,
+}: LessonCreateFormProps) {
   const router = useRouter();
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCategory, setErrorCategory] = useState<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const [generationController, setGenerationController] = useState<AbortController | null>(null);
+  const [appliedTemplate, setAppliedTemplate] = useState<LessonTemplate | null>(null);
+  const [libraryMessage, setLibraryMessage] = useState<string | null>(null);
+  const [appliedClassroomContext, setAppliedClassroomContext] = useState<ClassroomContextApplication | null>(null);
+  const [classroomContextState, setClassroomContextState] = useState<"idle" | "loading" | "error">("idle");
+  const [classroomContextMessage, setClassroomContextMessage] = useState<string | null>(null);
+  const [bloomLevels, setBloomLevels] = useState<BloomTaxonomyLevel[]>(["understand", "apply"]);
 
   const {
     register,
     handleSubmit,
-    watch,
+    setValue,
+    control,
+    getValues,
+    reset,
     formState: { errors },
   } = useForm<LessonPlanFormValues>({
     defaultValues: initialValues,
@@ -55,43 +90,114 @@ export function LessonCreateForm({ initialValues }: LessonCreateFormProps) {
     reValidateMode: "onChange",
   });
 
-  const currentValues = watch();
+  const currentValues = useWatch({
+    control,
+    defaultValue: initialValues,
+  }) as LessonPlanFormValues;
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadLibrarySelections() {
+      if (initialTemplateId) {
+        const template = await defaultTemplateRepository.get(initialTemplateId);
+        if (!active) return;
+        if (template) {
+          reset(applyTemplateToLessonForm(template, getValues()));
+          setAppliedTemplate(template);
+        } else {
+          setLibraryMessage("That template is no longer available. Your current lesson inputs were preserved.");
+        }
+      }
+
+      if (initialResourceId) {
+        const resource = await defaultResourceRepository.get(initialResourceId);
+        if (!active) return;
+        if (resource) {
+          const reference = toUploadedReference(resource);
+          const current = getValues("uploadedReferences") ?? [];
+          if (!current.some((item) => item.id === reference.id)) {
+            if (current.length >= MAX_REFERENCE_DOCUMENTS) {
+              setLibraryMessage(
+                `Remove a reference before adding “${reference.name}”. A lesson can use up to ${MAX_REFERENCE_DOCUMENTS} references.`
+              );
+            } else {
+              setValue("uploadedReferences", [...current, reference], {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+            }
+          }
+        } else {
+          setLibraryMessage("That resource is no longer available. Your current lesson inputs were preserved.");
+        }
+      }
+    }
+
+    void loadLibrarySelections();
+    return () => {
+      active = false;
+    };
+  }, [getValues, initialResourceId, initialTemplateId, reset, setValue]);
 
   async function handleGenerateLesson(values: LessonPlanFormValues) {
     setErrorMessage(null);
     setErrorCategory(null);
     setIsGenerating(true);
+    trackProductEvent("lesson_generation_started", {
+      curriculum: values.curriculum,
+      lesson_type: values.type,
+    });
 
     const controller = new AbortController();
-    abortControllerRef.current = controller;
+    setGenerationController(controller);
 
     try {
-      const result = await requestLessonGeneration(values, controller.signal);
+      const templateApplication = appliedTemplate
+        ? LessonTemplateApplicationSchema.parse(appliedTemplate)
+        : undefined;
+      const result = await requestLessonGeneration(
+        {
+          ...values,
+          appliedTemplate: templateApplication,
+          classroomContext: appliedClassroomContext ?? undefined,
+          bloomLevels,
+        },
+        controller.signal
+      );
 
       if (result.success) {
-        // Save canonical lesson draft and navigate to lesson viewer
-        const lessonId = saveDraftLesson(result.data);
+        const savedLesson = await defaultStorageAdapter.createLesson(result.data);
+        if (!savedLesson.id) {
+          throw new Error("The saved lesson did not return an identifier.");
+        }
+        trackProductEvent("lesson_generation_succeeded", {
+          curriculum: values.curriculum,
+          lesson_type: values.type,
+        });
         setIsGenerating(false);
-        router.push(`/lesson/${lessonId}`);
+        router.push(`/lesson/${savedLesson.id}`);
       } else {
+        trackProductEvent("lesson_generation_failed", { category: result.error.category });
         setIsGenerating(false);
         setErrorMessage(result.error.message);
         setErrorCategory(result.error.category);
       }
     } catch (err: unknown) {
+      trackProductEvent("lesson_generation_failed", { category: "UPSTREAM_FAILURE" });
       setIsGenerating(false);
       const msg = err instanceof Error ? err.message : "An unexpected client error occurred.";
       setErrorMessage(msg);
       setErrorCategory("UPSTREAM_FAILURE");
     } finally {
-      abortControllerRef.current = null;
+      setGenerationController((current) => (current === controller ? null : current));
     }
   }
 
   function handleCancelGeneration() {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
+    if (generationController) {
+      generationController.abort();
+      setGenerationController(null);
     }
     setIsGenerating(false);
     setErrorMessage("Lesson generation was cancelled. Your inputs remain preserved below.");
@@ -102,8 +208,38 @@ export function LessonCreateForm({ initialValues }: LessonCreateFormProps) {
     handleSubmit(handleGenerateLesson)();
   }
 
+  async function applySavedClassroomContext() {
+    setClassroomContextState("loading");
+    setClassroomContextMessage(null);
+    try {
+      const record = await defaultClassroomContextRepository.get();
+      const context = record.value;
+      setValue("duration", context.preferredDuration, { shouldDirty: true, shouldValidate: true });
+      setValue("classSize", context.classSize, { shouldDirty: true, shouldValidate: true });
+      setValue("language", context.language, { shouldDirty: true, shouldValidate: true });
+      setValue("resources", context.availableResources[0], { shouldDirty: true, shouldValidate: true });
+      setAppliedClassroomContext(context);
+      setClassroomContextState("idle");
+      setClassroomContextMessage("Saved classroom defaults applied. They will guide this lesson only while the context remains included below.");
+    } catch (error) {
+      setClassroomContextState("error");
+      setClassroomContextMessage(error instanceof Error ? error.message : "Classroom defaults could not be loaded.");
+    }
+  }
+
+  function toggleBloomLevel(level: BloomTaxonomyLevel, checked: boolean) {
+    setBloomLevels((current) => {
+      const next = checked ? [...new Set([...current, level])] : current.filter((item) => item !== level);
+      const parsed = BloomTaxonomyLevelSchema.array().min(1).max(3).safeParse(next);
+      return parsed.success ? parsed.data : current;
+    });
+  }
+
   const selectedCurriculum = curriculumOptions.find((c) => c.value === currentValues.curriculum);
   const selectedType = lessonTypeOptions.find((t) => t.value === currentValues.type);
+  const curriculumSelectionIsVerified = initialCurriculumRecord
+    ? curriculumRecordMatchesLessonInput(initialCurriculumRecord, currentValues)
+    : false;
 
   return (
     <div className="lesson-create-container">
@@ -126,6 +262,43 @@ export function LessonCreateForm({ initialValues }: LessonCreateFormProps) {
           Fine-tune curriculum alignment, subject scope, classroom context, and custom rules before creating your AI lesson plan.
         </p>
       </div>
+
+      {initialCurriculumRecord ? (
+        <div
+          className={`library-selection-notice ${curriculumSelectionIsVerified ? "" : "warning"}`}
+          role="status"
+        >
+          <div>
+            <strong>
+              {curriculumSelectionIsVerified
+                ? "Verified curriculum competency selected"
+                : "Curriculum selection changed"}
+            </strong>
+            <span>
+              {curriculumSelectionIsVerified
+                ? `${initialCurriculumRecord.verificationStatus === "VERIFIED_DEPED_OFFICIAL" ? "DepEd official" : "Regional official"} · ${initialCurriculumRecord.sourceReference}`
+                : "The edited inputs will be treated as teacher-authored. No official competency code will be claimed unless they match the selected verified record."}
+            </span>
+          </div>
+          <Link href="/curriculum">Review source</Link>
+        </div>
+      ) : null}
+
+      {appliedTemplate || libraryMessage ? (
+        <div className={`library-selection-notice ${libraryMessage ? "warning" : ""}`} role="status">
+          <div>
+            <strong>{libraryMessage ? "Library item unavailable" : `Template applied: ${appliedTemplate?.name}`}</strong>
+            <span>
+              {libraryMessage ?? "Defaults are populated below and its section pattern will guide generation."}
+            </span>
+          </div>
+          {appliedTemplate ? (
+            <button onClick={() => setAppliedTemplate(null)} type="button">
+              Remove pattern
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <form
         className="lesson-create-form"
@@ -357,6 +530,18 @@ export function LessonCreateForm({ initialValues }: LessonCreateFormProps) {
           </div>
 
           <div className="card-body">
+            <div className={`classroom-context-apply${appliedClassroomContext ? " applied" : ""}`}>
+              <div className="classroom-context-apply-copy">
+                <UsersRound aria-hidden="true" />
+                <div>
+                  <strong>{appliedClassroomContext ? "Saved classroom context is included" : "Use your reusable classroom defaults"}</strong>
+                  <span>{appliedClassroomContext ? "Review the populated fields. General learner supports and teacher notes will be sent as bounded data for this lesson." : "Nothing is loaded or sent until you choose to apply it."}</span>
+                </div>
+              </div>
+              {appliedClassroomContext ? <button onClick={() => { setAppliedClassroomContext(null); setClassroomContextMessage("Classroom context removed from AI generation. The populated form fields were kept for review."); }} type="button">Exclude from AI</button> : <button disabled={classroomContextState === "loading" || isGenerating} onClick={() => void applySavedClassroomContext()} type="button">{classroomContextState === "loading" ? "Loading defaults…" : "Apply saved context"}</button>}
+            </div>
+            {classroomContextMessage ? <p className={`classroom-context-message ${classroomContextState}`} role={classroomContextState === "error" ? "alert" : "status"}>{classroomContextMessage}</p> : null}
+            {appliedClassroomContext ? <div className="classroom-context-summary" aria-label="Applied classroom context"><span>{appliedClassroomContext.availableResources.length} resource setting{appliedClassroomContext.availableResources.length === 1 ? "" : "s"}</span><span>{appliedClassroomContext.learnerNeeds.length} learner support{appliedClassroomContext.learnerNeeds.length === 1 ? "" : "s"}</span><span>{appliedClassroomContext.teacherNotes ? "General teacher notes included" : "No saved teacher notes"}</span></div> : null}
             <div className="form-grid-2">
               {/* Duration */}
               <div className="form-group">
@@ -442,17 +627,48 @@ export function LessonCreateForm({ initialValues }: LessonCreateFormProps) {
                 </div>
               </div>
             </div>
+            <fieldset className="lesson-bloom-controls">
+              <legend>Bloom&apos;s taxonomy targets</legend>
+              <p>Select one to three levels to guide objective verbs, activities, and assessment demand. This does not lock later teacher edits.</p>
+              <div>{BloomTaxonomyLevelSchema.options.map((level) => <label key={level}><input checked={bloomLevels.includes(level)} disabled={isGenerating || (bloomLevels.includes(level) ? bloomLevels.length === 1 : bloomLevels.length === 3)} onChange={(event) => toggleBloomLevel(level, event.target.checked)} type="checkbox" /><span>{level}</span></label>)}</div>
+            </fieldset>
           </div>
         </section>
 
-        {/* SECTION 4: Additional Instructions */}
+        {/* SECTION 4: Reference documents */}
+        <section className="lesson-form-card" aria-labelledby="heading-references">
+          <div className="card-header">
+            <div className="card-icon violet">
+              <Paperclip aria-hidden="true" size={20} />
+            </div>
+            <div>
+              <h2 id="heading-references">4. Reference Documents</h2>
+              <p>Add trusted source material and review exactly what the lesson generator can use.</p>
+            </div>
+          </div>
+          <div className="card-body">
+            <ReferenceUpload
+              disabled={isGenerating}
+              onReferenceUploaded={() => undefined}
+              onChange={(uploadedReferences) =>
+                setValue("uploadedReferences", uploadedReferences, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                })
+              }
+              references={currentValues.uploadedReferences ?? []}
+            />
+          </div>
+        </section>
+
+        {/* SECTION 5: Additional Instructions */}
         <section className="lesson-form-card" aria-labelledby="heading-instructions">
           <div className="card-header">
             <div className="card-icon orange">
               <Layers aria-hidden="true" size={20} />
             </div>
             <div>
-              <h2 id="heading-instructions">4. Custom Teacher Instructions</h2>
+              <h2 id="heading-instructions">5. Custom Teacher Instructions</h2>
               <p>Add specific adaptations, group work rules, or learning goals.</p>
             </div>
           </div>
@@ -477,7 +693,7 @@ export function LessonCreateForm({ initialValues }: LessonCreateFormProps) {
                   id="field-instructions"
                   maxLength={500}
                   rows={4}
-                  placeholder="e.g., Include a 5-minute hands-on leaf observation activity; provide differentiated questions for struggling learners."
+                  placeholder="e.g., Include a 5-minute leaf observation; offer an optional worked example and deeper extension questions."
                 />
               </div>
               {errors.instructions && (
@@ -489,7 +705,7 @@ export function LessonCreateForm({ initialValues }: LessonCreateFormProps) {
           </div>
         </section>
 
-        {/* SECTION 5: Summary & Generation Pipeline Status Region */}
+        {/* SECTION 6: Summary & Generation Pipeline Status Region */}
         <section className="lesson-form-card summary-card" aria-label="Generation summary and status">
           <div className="payload-summary-bar">
             <div className="summary-pill-group">

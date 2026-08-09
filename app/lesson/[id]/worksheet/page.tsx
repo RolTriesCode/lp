@@ -4,9 +4,10 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowDown, ArrowUp, Loader2, Plus, Save, Sparkles, Trash2, Eye, Printer } from "lucide-react";
 import { useWorksheetStore } from "@/stores/worksheet-store";
-import { getDraftLesson } from "@/lib/draft-store";
+import { defaultStorageAdapter } from "@/lib/persistence/remote-adapter";
 import type { LessonPlan } from "@/schemas/lesson";
 import "@/components/worksheet/worksheet.css";
+import { LinkedLessonUnavailable } from "@/components/library/library-states";
 
 type WorksheetPageProps = {
   params: Promise<{ id: string }>;
@@ -21,6 +22,7 @@ export default function WorksheetPage({ params }: WorksheetPageProps) {
   const [itemCount, setItemCount] = useState<number>(5);
   const [additionalInstructions, setAdditionalInstructions] = useState<string>("");
   const [viewMode, setViewMode] = useState<"student" | "answer_key">("answer_key");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const {
     activeWorksheet,
@@ -41,16 +43,18 @@ export default function WorksheetPage({ params }: WorksheetPageProps) {
 
   useEffect(() => {
     if (lessonId) {
-      const match = getDraftLesson(lessonId);
-      if (match) {
-        setLesson(match);
-        loadWorksheet(lessonId);
-      } else {
-        router.push("/dashboard");
-      }
+      void (async () => {
+        try {
+          const match = await defaultStorageAdapter.getLesson(lessonId);
+          if (!match) return setLoadError("The lesson may have been removed, or this account no longer has access to it.");
+          setLesson(match);
+          await loadWorksheet(lessonId);
+        } catch { setLoadError("The lesson and worksheet repository could not be reached. Try again from My Lesson Plans."); }
+      })();
     }
   }, [lessonId, loadWorksheet, router]);
 
+  if (loadError) return <LinkedLessonUnavailable message={loadError} />;
   if (!lesson) {
     return (
       <div className="fullscreen-loading">
@@ -159,7 +163,7 @@ export default function WorksheetPage({ params }: WorksheetPageProps) {
               id="select-diff"
               className="form-select"
               value={selectedDifficulty}
-              onChange={(e) => setSelectedDifficulty(e.target.value as any)}
+              onChange={(e) => setSelectedDifficulty(e.target.value as "easy" | "average" | "difficult")}
             >
               <option value="easy">Easy (Reinforcement Activities)</option>
               <option value="average">Average (Standard Exercises)</option>

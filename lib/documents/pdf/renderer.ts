@@ -16,7 +16,10 @@ function stripHtml(html: string): string {
 /**
  * Generates a formal DepEd lesson plan PDF document.
  */
-export async function generatePdfFile(lesson: LessonPlan): Promise<Buffer> {
+export async function generatePdfFile(
+  lesson: LessonPlan,
+  options: { includePrivateNotes?: boolean } = {}
+): Promise<Buffer> {
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -149,6 +152,15 @@ export async function generatePdfFile(lesson: LessonPlan): Promise<Buffer> {
   }
   if (lesson.reflection) {
     addText(`Teacher's Reflection Notes: ${stripHtml(lesson.reflection)}`, { indent: 5 });
+  }
+
+
+  if (options.includePrivateNotes && lesson.privateTeacherNotes?.some((note) => note.text.trim())) {
+    currentY += 4;
+    addText("PRIVATE TEACHER NOTES", { bold: true, size: 12 });
+    lesson.privateTeacherNotes.filter((note) => note.text.trim()).forEach((note) => {
+      addText(`${note.section}: ${note.text}`, { indent: 5 });
+    });
   }
 
   // Output as ArrayBuffer to build Buffer

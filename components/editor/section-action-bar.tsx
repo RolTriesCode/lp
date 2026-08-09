@@ -9,16 +9,19 @@ import {
   Sparkles,
   Undo,
   Wand2,
+  Check,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import type { SectionActionType, SectionType } from "@/lib/ai/rewrite-section";
 import { useLessonStore } from "@/stores/lesson-store";
+import { validateSectionSuggestion } from "@/lib/pedagogy/suggestions";
 
 type SectionActionBarProps = {
   sectionType: SectionType;
-  currentContent: any;
-  onApplyResult: (updatedContent: any) => void;
-  previousContent?: any;
+  currentContent: unknown;
+  onApplyResult: (updatedContent: unknown) => void;
+  previousContent?: unknown;
   onUndo?: () => void;
 };
 
@@ -34,6 +37,7 @@ export function SectionActionBar({
   const [customPrompt, setCustomPrompt] = useState("");
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [proposedSuggestion, setProposedSuggestion] = useState<unknown | null>(null);
 
   if (!activeLesson) return null;
 
@@ -53,6 +57,7 @@ export function SectionActionBar({
       subject: activeLesson.subject,
       topic: activeLesson.subjectMatter.topic,
       customPrompt: promptText || customPrompt,
+      bloomTargets: activeLesson.pedagogy?.bloomTargets ?? ["understand", "apply"],
     };
 
     try {
@@ -65,7 +70,7 @@ export function SectionActionBar({
       const data = await response.json();
 
       if (data.success) {
-        onApplyResult(data.updatedContent);
+        setProposedSuggestion(validateSectionSuggestion(sectionType, data.updatedContent));
         setCustomPrompt("");
         setShowCustomInput(false);
       } else {
@@ -76,6 +81,16 @@ export function SectionActionBar({
       setErrorMsg(msg);
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  function applySuggestion() {
+    if (proposedSuggestion === null) return;
+    try {
+      onApplyResult(validateSectionSuggestion(sectionType, proposedSuggestion));
+      setProposedSuggestion(null);
+    } catch {
+      setErrorMsg("The proposed section no longer matches the canonical lesson schema.");
     }
   }
 
@@ -91,7 +106,7 @@ export function SectionActionBar({
           className="btn-section-ai"
           onClick={() => handleExecuteAction("simplify")}
           disabled={isLoading}
-          title="Simplify language for struggling learners"
+          title="Offer a clearer-language version while preserving the learning target"
         >
           <Wand2 size={12} /> Simplify
         </button>
@@ -111,7 +126,7 @@ export function SectionActionBar({
           className="btn-section-ai"
           onClick={() => handleExecuteAction("formalize")}
           disabled={isLoading}
-          title="Formalize language for DepEd compliance"
+          title="Use a formal lesson-plan tone without making certification claims"
         >
           <BookOpen size={12} /> Formalize
         </button>
@@ -135,7 +150,7 @@ export function SectionActionBar({
           {showCustomInput ? "Hide Custom" : "Custom Rule..."}
         </button>
 
-        {previousContent && onUndo && (
+        {previousContent !== undefined && previousContent !== null && onUndo && (
           <button
             type="button"
             className="btn-section-ai undo-btn"
@@ -176,7 +191,7 @@ export function SectionActionBar({
             onClick={() => handleExecuteAction("regenerate", customPrompt)}
             disabled={isLoading || !customPrompt.trim()}
           >
-            Apply Instruction
+            Generate proposal
           </button>
         </div>
       )}
@@ -187,6 +202,14 @@ export function SectionActionBar({
           <span>{errorMsg}</span>
         </div>
       )}
+
+      {proposedSuggestion !== null ? (
+        <div className="section-suggestion-review" role="region" aria-label="AI section proposal">
+          <div><strong>AI proposal — not applied</strong><span>Review the validated section content before changing the lesson.</span></div>
+          <pre>{typeof proposedSuggestion === "string" ? proposedSuggestion : JSON.stringify(proposedSuggestion, null, 2)}</pre>
+          <div><button onClick={() => setProposedSuggestion(null)} type="button"><X aria-hidden="true" /> Reject</button><button className="accept" onClick={applySuggestion} type="button"><Check aria-hidden="true" /> Accept change</button></div>
+        </div>
+      ) : null}
     </div>
   );
 }

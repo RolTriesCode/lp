@@ -1,5 +1,6 @@
 import { SHARED_SYSTEM_CONSTRAINTS } from "./common";
 import type { PresentationTheme } from "@/schemas/presentation";
+import type { LessonPlan } from "@/schemas/lesson";
 
 export type BuildPresentationPromptOptions = {
   theme: PresentationTheme;
@@ -39,9 +40,26 @@ SLIDE STRUCTURING RULES:
 You must output ONLY a valid JSON object matching the requested schema.`;
 }
 
-export function buildPresentationUserPrompt(lessonJson: any, theme: PresentationTheme): string {
+export function buildPresentationUserPrompt(lesson: LessonPlan, theme: PresentationTheme): string {
+  const studentFacingContext = {
+    curriculum: lesson.curriculum,
+    lessonType: lesson.lessonType,
+    title: lesson.title,
+    gradeLevel: lesson.gradeLevel,
+    subject: lesson.subject,
+    quarter: lesson.quarter,
+    week: lesson.week,
+    duration: lesson.duration,
+    standards: lesson.standards,
+    objectives: lesson.objectives,
+    subjectMatter: lesson.subjectMatter,
+    procedures: lesson.procedures,
+    assessment: lesson.assessment,
+    assignment: lesson.assignment,
+  };
+
   return `Lesson Plan Data:
-${JSON.stringify(lessonJson, null, 2)}
+${JSON.stringify(studentFacingContext, null, 2)}
 
 Theme Choice: ${theme}
 

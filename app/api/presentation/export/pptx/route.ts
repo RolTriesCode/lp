@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { generatePptxFile } from "@/lib/documents/pptx/renderer";
 import { safeParsePresentation } from "@/schemas/presentation";
+import { captureMonitoringException } from "@/lib/monitoring/sentry";
 
 export async function POST(request: Request) {
   try {
@@ -33,13 +34,15 @@ export async function POST(request: Request) {
         "Content-Disposition": `attachment; filename="${cleanTitle}.pptx"`,
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    captureMonitoringException(err, { area: "presentation_export", category: "UPSTREAM_FAILURE" });
+    const message = err instanceof Error ? err.message : "Failed to generate PPTX document stream.";
     return NextResponse.json(
       {
         success: false,
         error: {
           category: "UPSTREAM_FAILURE",
-          message: err.message || "Failed to generate PPTX document stream.",
+          message,
           retryable: true,
         },
       },

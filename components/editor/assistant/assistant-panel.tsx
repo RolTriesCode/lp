@@ -10,13 +10,17 @@ import {
 import { useState } from "react";
 import type { SectionActionType } from "@/lib/ai/rewrite-section";
 import { useLessonStore } from "@/stores/lesson-store";
+import type { LessonPlan } from "@/schemas/lesson";
+import { validateSectionSuggestion } from "@/lib/pedagogy/suggestions";
+import type { SectionType } from "@/lib/ai/rewrite-section";
 
 export function AssistantPanel() {
   const { activeLesson, selectedSectionType, updateSection } = useLessonStore();
   const [isLoading, setIsLoading] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [proposedSuggestion, setProposedSuggestion] = useState<any | null>(null);
+  const [proposedSuggestion, setProposedSuggestion] = useState<unknown | null>(null);
+  const [useClassroomContext, setUseClassroomContext] = useState(false);
 
   if (!activeLesson) return null;
 
@@ -53,6 +57,9 @@ export function AssistantPanel() {
       subject,
       topic,
       customPrompt: promptText || customPrompt,
+      uploadedReferences: activeLesson.uploadedReferences ?? [],
+      classroomContext: useClassroomContext ? activeLesson.classroomContext : undefined,
+      bloomTargets: activeLesson.pedagogy?.bloomTargets ?? ["understand", "apply"],
     };
 
     try {
@@ -65,7 +72,7 @@ export function AssistantPanel() {
       const data = await response.json();
 
       if (data.success) {
-        setProposedSuggestion(data.updatedContent);
+        setProposedSuggestion(validateSectionSuggestion(selectedSectionType as SectionType, data.updatedContent));
         setCustomPrompt("");
       } else {
         setErrorMsg(data.error?.message || "Assistant suggestion generation failed.");
@@ -80,8 +87,14 @@ export function AssistantPanel() {
 
   function handleApplySuggestion() {
     if (selectedSectionType && proposedSuggestion) {
-      updateSection(selectedSectionType as any, proposedSuggestion);
-      setProposedSuggestion(null);
+      const section = selectedSectionType as keyof LessonPlan;
+      try {
+        const validated = validateSectionSuggestion(selectedSectionType as SectionType, proposedSuggestion);
+        updateSection(section, validated as LessonPlan[typeof section]);
+        setProposedSuggestion(null);
+      } catch {
+        setErrorMsg("The proposal no longer matches the canonical lesson schema.");
+      }
     }
   }
 
@@ -111,6 +124,12 @@ export function AssistantPanel() {
         </div>
       ) : (
         <div className="assistant-content">
+          {activeLesson.classroomContext ? (
+            <label className="assistant-context-choice">
+              <input checked={useClassroomContext} onChange={(event) => setUseClassroomContext(event.target.checked)} type="checkbox" />
+              <span><strong>Use this lesson&apos;s classroom context</strong><small>Only relevant objective, procedure, and assessment actions will receive it.</small></span>
+            </label>
+          ) : null}
           {/* Quick Actions List */}
           <div className="assistant-actions-list">
             <span className="action-list-header">Quick Assistant Tools</span>
@@ -130,7 +149,7 @@ export function AssistantPanel() {
               onClick={() =>
                 handleExecuteAction(
                   "regenerate",
-                  "Differentiate for learners of varying abilities: include support scaffoldings for struggling learners and extension questions for advanced learners."
+                  "Offer optional learning pathways: include a worked-example scaffold available to anyone and extension questions for learners who want a deeper challenge."
                 )
               }
               disabled={isLoading}
@@ -214,7 +233,7 @@ export function AssistantPanel() {
           )}
 
           {/* Suggested Diff Review Panel */}
-          {proposedSuggestion && (
+          {proposedSuggestion !== null && (
             <div className="suggestion-review-card" role="dialog" aria-labelledby="suggestion-title">
               <h4 id="suggestion-title">Proposed Suggestion Review</h4>
               <p className="review-hint">Verify changes before applying to the lesson card.</p>

@@ -1,6 +1,7 @@
 import { VERIFIED_CURRICULUM_RECORDS } from "@/data/curriculum/records";
 import type { CurriculumType } from "@/schemas/lesson";
 import type { CurriculumRecord, VerificationStatus } from "./types";
+import { CurriculumRecordSchema } from "./types";
 
 export type CurriculumFilter = {
   curriculum?: CurriculumType;
@@ -46,6 +47,21 @@ export function findCurriculumRecords(filter: CurriculumFilter): CurriculumRecor
   });
 }
 
+export function findVerifiedCurriculumRecords(filter: CurriculumFilter): CurriculumRecord[] {
+  return findCurriculumRecords(filter).filter(
+    (record) => record.verificationStatus !== "UNVERIFIED_TEACHER_DRAFT"
+  );
+}
+
+export function getVerifiedCurriculumRecordById(id: string): CurriculumRecord | undefined {
+  const record = VERIFIED_CURRICULUM_RECORDS.find((candidate) => candidate.id === id);
+  const parsed = CurriculumRecordSchema.safeParse(record);
+  if (!parsed.success || parsed.data.verificationStatus === "UNVERIFIED_TEACHER_DRAFT") {
+    return undefined;
+  }
+  return parsed.data;
+}
+
 /**
  * Look up official DepEd competency code for a given curriculum, grade, subject, and topic.
  * Returns official verified code string if found and verified; otherwise returns undefined.
@@ -76,11 +92,24 @@ export function getCurriculumProvenance(
   curriculum: CurriculumType,
   gradeLevel: string,
   subject: string,
-  topic: string
+  topic: string,
+  quarter?: string,
+  competencyText?: string
 ): ProvenanceInfo {
-  const matches = findCurriculumRecords({ curriculum, gradeLevel, subject, topicSearch: topic });
-  if (matches.length > 0) {
-    const match = matches[0];
+  const matches = findCurriculumRecords({
+    curriculum,
+    gradeLevel,
+    subject,
+    quarter,
+    topicSearch: topic,
+  });
+  const match = matches.find(
+    (record) =>
+      normalizeText(record.topic) === normalizeText(topic) &&
+      (!competencyText?.trim() ||
+        normalizeText(record.competencyText) === normalizeText(competencyText))
+  );
+  if (match) {
     return {
       sourceReference: match.sourceReference,
       verificationStatus: match.verificationStatus,

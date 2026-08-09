@@ -2,16 +2,21 @@
 
 import { AlertTriangle, ArrowLeft, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { StructuredEditor } from "@/components/editor/structured-editor";
 import { useLessonStore } from "@/stores/lesson-store";
 
 type LessonViewerProps = {
   lessonId: string;
+  initialSection?: string;
 };
 
-export function LessonViewer({ lessonId }: LessonViewerProps) {
-  const [hasMounted, setHasMounted] = useState(false);
+export function LessonViewer({ lessonId, initialSection }: LessonViewerProps) {
+  const hasMounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
   const {
     activeLesson: lesson,
@@ -21,8 +26,7 @@ export function LessonViewer({ lessonId }: LessonViewerProps) {
   } = useLessonStore();
 
   useEffect(() => {
-    setHasMounted(true);
-    loadLesson(lessonId);
+    void Promise.resolve().then(() => loadLesson(lessonId));
   }, [lessonId, loadLesson]);
 
   // Prevent SSR/CSR hydration mismatches by rendering loading state until mounted
@@ -71,5 +75,5 @@ export function LessonViewer({ lessonId }: LessonViewerProps) {
     );
   }
 
-  return <StructuredEditor />;
+  return <StructuredEditor initialSection={initialSection} />;
 }

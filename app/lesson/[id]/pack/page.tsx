@@ -2,15 +2,25 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, BookOpen, Layers, Presentation, FileText, CheckSquare, Sparkles, Layout } from "lucide-react";
+import { ArrowLeft, BookOpen, Layers, Presentation, FileText, CheckSquare, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { getDraftLesson, getDraftPresentation, getDraftAssessment, getDraftWorksheet, getDraftRubric } from "@/lib/draft-store";
+import { getDraftRubric } from "@/lib/draft-store";
+import { defaultStorageAdapter } from "@/lib/persistence/remote-adapter";
+import { SupabaseArtifactRepository } from "@/lib/persistence/artifact-repository";
+import { PresentationSchema } from "@/schemas/presentation";
+import { AssessmentSchema } from "@/schemas/assessment";
+import { WorksheetSchema } from "@/schemas/worksheet";
 import type { LessonPlan } from "@/schemas/lesson";
 import "@/components/rubric/rubric.css";
+import { LinkedLessonUnavailable } from "@/components/library/library-states";
 
 type PackPageProps = {
   params: Promise<{ id: string }>;
 };
+
+const presentationRepository = new SupabaseArtifactRepository("presentations", PresentationSchema);
+const assessmentRepository = new SupabaseArtifactRepository("assessments", AssessmentSchema);
+const worksheetRepository = new SupabaseArtifactRepository("worksheets", WorksheetSchema);
 
 export default function PackPage({ params }: PackPageProps) {
   const router = useRouter();
@@ -21,24 +31,30 @@ export default function PackPage({ params }: PackPageProps) {
   const [hasAssessment, setHasAssessment] = useState(false);
   const [hasWorksheet, setHasWorksheet] = useState(false);
   const [hasRubric, setHasRubric] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (lessonId) {
-      const match = getDraftLesson(lessonId);
-      if (match) {
-        setLesson(match);
-
-        // Check availability of assets
-        setHasPresentation(!!getDraftPresentation(lessonId));
-        setHasAssessment(!!getDraftAssessment(lessonId));
-        setHasWorksheet(!!getDraftWorksheet(lessonId));
-        setHasRubric(!!getDraftRubric(lessonId));
-      } else {
-        router.push("/dashboard");
-      }
+      void (async () => {
+        try {
+          const match = await defaultStorageAdapter.getLesson(lessonId);
+          if (!match) return setLoadError("The lesson may have been removed, or this account no longer has access to it.");
+          setLesson(match);
+          const [presentation, assessment, worksheet] = await Promise.all([
+            presentationRepository.getForLesson(lessonId),
+            assessmentRepository.getForLesson(lessonId),
+            worksheetRepository.getForLesson(lessonId),
+          ]);
+          setHasPresentation(Boolean(presentation));
+          setHasAssessment(Boolean(assessment));
+          setHasWorksheet(Boolean(worksheet));
+          setHasRubric(Boolean(getDraftRubric(lessonId)));
+        } catch { setLoadError("The teaching-pack records could not be loaded. Open the lesson and try again."); }
+      })();
     }
   }, [lessonId, router]);
 
+  if (loadError) return <LinkedLessonUnavailable message={loadError} />;
   if (!lesson) {
     return (
       <div className="fullscreen-loading">
@@ -97,10 +113,10 @@ export default function PackPage({ params }: PackPageProps) {
       <div className="lesson-create-header-nav" style={{ marginBottom: "16px" }}>
         <button
           className="lesson-back-btn"
-          onClick={() => router.push("/dashboard")}
+          onClick={() => router.push(`/lesson/${lessonId}`)}
           type="button"
         >
-          <ArrowLeft size={16} /> Back to Dashboard
+          <ArrowLeft size={16} /> Back to Editor
         </button>
       </div>
 

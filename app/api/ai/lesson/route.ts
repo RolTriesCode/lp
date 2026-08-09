@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateCorrelationId, generateLesson } from "@/lib/ai/generate-lesson";
+import { captureMonitoringException } from "@/lib/monitoring/sentry";
 
 export async function POST(request: Request) {
   const correlationId = generateCorrelationId();
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result, { status });
   } catch (err) {
+    captureMonitoringException(err, { area: "lesson_generation", category: "UPSTREAM_FAILURE" });
     const message = err instanceof Error ? err.message : "Internal server error";
     return NextResponse.json(
       {

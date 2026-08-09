@@ -3,12 +3,13 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowDown, ArrowUp, Loader2, Plus, Save, Sparkles, Trash2, Download } from "lucide-react";
-import Link from "next/link";
 import { usePresentationStore } from "@/stores/presentation-store";
-import { getDraftLesson } from "@/lib/draft-store";
+import { defaultStorageAdapter } from "@/lib/persistence/remote-adapter";
 import type { LessonPlan } from "@/schemas/lesson";
 import type { PresentationTheme, SlideLayout } from "@/schemas/presentation";
 import "@/components/presentation/presentation.css";
+import { LinkedLessonUnavailable } from "@/components/library/library-states";
+import { trackProductEvent } from "@/lib/monitoring/analytics";
 
 type PresentPageProps = {
   params: Promise<{ id: string }>;
@@ -21,6 +22,7 @@ export default function PresentPage({ params }: PresentPageProps) {
   const [lesson, setLesson] = useState<LessonPlan | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<PresentationTheme>("classroom");
   const [isExporting, setIsExporting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const {
     activePresentation,
@@ -41,16 +43,18 @@ export default function PresentPage({ params }: PresentPageProps) {
 
   useEffect(() => {
     if (lessonId) {
-      const match = getDraftLesson(lessonId);
-      if (match) {
-        setLesson(match);
-        loadPresentation(lessonId);
-      } else {
-        router.push("/dashboard");
-      }
+      void (async () => {
+        try {
+          const match = await defaultStorageAdapter.getLesson(lessonId);
+          if (!match) return setLoadError("The lesson may have been removed, or this account no longer has access to it.");
+          setLesson(match);
+          await loadPresentation(lessonId);
+        } catch { setLoadError("The lesson and presentation repository could not be reached. Try again from My Lesson Plans."); }
+      })();
     }
   }, [lessonId, loadPresentation, router]);
 
+  if (loadError) return <LinkedLessonUnavailable message={loadError} />;
   if (!lesson) {
     return (
       <div className="fullscreen-loading">
@@ -84,10 +88,11 @@ export default function PresentPage({ params }: PresentPageProps) {
         a.click();
         a.remove();
         window.URL.revokeObjectURL(url);
+        trackProductEvent("export_completed", { format: "pptx" });
       } else {
         alert("Failed to export PowerPoint presentation.");
       }
-    } catch (err) {
+    } catch {
       alert("Error occurred during PowerPoint generation.");
     } finally {
       setIsExporting(false);

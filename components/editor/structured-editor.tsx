@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   BookOpen,
   CheckCircle2,
+  CloudOff,
   Clock,
   FileCheck2,
   Layers,
@@ -13,9 +14,14 @@ import {
   Target,
   Download,
   Loader2,
+  Paperclip,
+  RefreshCw,
+  Brain,
+  LockKeyhole,
+  Presentation,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AssistantPanel } from "@/components/editor/assistant/assistant-panel";
 import { AssessmentSection } from "@/components/editor/sections/assessment-section";
 import { MetadataSection } from "@/components/editor/sections/metadata-section";
@@ -25,22 +31,88 @@ import { ReflectionSection } from "@/components/editor/sections/reflection-secti
 import { StandardsSection } from "@/components/editor/sections/standards-section";
 import { SubjectMatterSection } from "@/components/editor/sections/subject-matter-section";
 import { useLessonStore } from "@/stores/lesson-store";
+import { ReferenceUpload } from "@/components/lesson/reference-upload";
+import { PedagogyTools } from "@/components/editor/pedagogy/pedagogy-tools";
+import { TeacherNotes } from "@/components/editor/pedagogy/teacher-notes";
 import "@/components/editor/editor.css";
+import { trackProductEvent } from "@/lib/monitoring/analytics";
 
-export function StructuredEditor() {
+export function StructuredEditor({ initialSection }: { initialSection?: string }) {
   const [activeRailId, setActiveRailId] = useState("section-metadata");
+  const [isExporting, setIsExporting] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [includePrivateNotesInExport, setIncludePrivateNotesInExport] = useState(false);
   const {
     activeLesson,
     isDirty,
+    autosaveStatus,
+    lastSavedAt,
+    saveError,
+    conflictRemote,
     updateSection,
     updateActiveLesson,
     saveActiveLesson,
+    retrySave,
+    acceptRemoteVersion,
+    overwriteRemoteVersion,
+    markOffline,
     setSelectedSection,
   } = useLessonStore();
 
-  if (!activeLesson) return null;
+  useEffect(() => {
+    trackProductEvent("editor_opened", { surface: "structured_editor" });
+  }, []);
 
-  const [isExporting, setIsExporting] = useState(false);
+  useEffect(() => {
+    if (
+      !activeLesson ||
+      !isDirty ||
+      autosaveStatus === "saving" ||
+      autosaveStatus === "offline" ||
+      autosaveStatus === "conflict" ||
+      autosaveStatus === "failed"
+    ) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void saveActiveLesson();
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [activeLesson, autosaveStatus, isDirty, saveActiveLesson]);
+
+  useEffect(() => {
+    const handleOffline = () => markOffline();
+    const handleOnline = () => {
+      const state = useLessonStore.getState();
+      if (state.isDirty && state.autosaveStatus !== "conflict") void retrySave();
+    };
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!useLessonStore.getState().isDirty) return;
+      event.preventDefault();
+    };
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [markOffline, retrySave]);
+
+  useEffect(() => {
+    if (!initialSection || !activeLesson) return;
+    const targetId = initialSection === "pedagogy" ? "section-pedagogy" : `section-${initialSection}`;
+    const sectionType = initialSection === "pedagogy" ? null : initialSection as Parameters<typeof setSelectedSection>[0];
+    const frame = window.requestAnimationFrame(() => {
+      setActiveRailId(targetId);
+      setSelectedSection(sectionType);
+      document.getElementById(targetId)?.scrollIntoView({ block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeLesson, initialSection, setSelectedSection]);
+
+  if (!activeLesson) return null;
 
   async function handleExportDocx() {
     if (!activeLesson) return;
@@ -50,7 +122,7 @@ export function StructuredEditor() {
       const response = await fetch("/api/lesson/export/docx", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(activeLesson),
+        body: JSON.stringify({ lesson: activeLesson, includePrivateNotes: includePrivateNotesInExport }),
       });
 
       if (response.ok) {
@@ -64,6 +136,8 @@ export function StructuredEditor() {
         a.click();
         a.remove();
         window.URL.revokeObjectURL(url);
+        trackProductEvent("export_completed", { format: "docx" });
+        setIncludePrivateNotesInExport(false);
       } else {
         alert("Failed to export Word document.");
       }
@@ -74,8 +148,6 @@ export function StructuredEditor() {
     }
   }
 
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
-
   async function handleExportPdf() {
     if (!activeLesson) return;
     setIsExportingPdf(true);
@@ -84,7 +156,7 @@ export function StructuredEditor() {
       const response = await fetch("/api/lesson/export/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(activeLesson),
+        body: JSON.stringify({ lesson: activeLesson, includePrivateNotes: includePrivateNotesInExport }),
       });
 
       if (response.ok) {
@@ -98,6 +170,8 @@ export function StructuredEditor() {
         a.click();
         a.remove();
         window.URL.revokeObjectURL(url);
+        trackProductEvent("export_completed", { format: "pdf" });
+        setIncludePrivateNotesInExport(false);
       } else {
         alert("Failed to export PDF document.");
       }
@@ -108,7 +182,7 @@ export function StructuredEditor() {
     }
   }
 
-  function handleSectionFocus(id: string, type: any) {
+  function handleSectionFocus(id: string, type: Parameters<typeof setSelectedSection>[0]) {
     setActiveRailId(id);
     setSelectedSection(type);
     const element = document.getElementById(id);
@@ -129,22 +203,40 @@ export function StructuredEditor() {
           <Link className="lesson-back-btn" href={`/lesson/${activeLesson.id}/pack`}>
             <span>Teaching Pack</span>
           </Link>
+          <Link className="lesson-back-btn" href="/curriculum">Curriculum</Link>
+          <Link className="lesson-back-btn" href="/resources">Resources</Link>
+          <Link className="lesson-back-btn" href={`/templates?lessonId=${activeLesson.id ?? ""}`}>
+            Save as Template
+          </Link>
+          <Link className="lesson-back-btn" href={`/lesson/${activeLesson.id}/teaching-mode`}>
+            <Presentation aria-hidden="true" size={15} /> Teach lesson
+          </Link>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {isDirty ? (
-            <span
-              className="lesson-step-badge"
-              style={{ background: "#fff5f7", color: "#e44b66", border: "1px solid #f8c8d1" }}
-            >
-              <AlertTriangle size={12} />
-              Unsaved Draft Changes
-            </span>
-          ) : (
-            <span className="lesson-step-badge">
-              <CheckCircle2 aria-hidden="true" size={13} />
-              All Draft Changes Saved
-            </span>
-          )}
+          <span
+            aria-live="polite"
+            className={`autosave-indicator ${autosaveStatus}`}
+            role={autosaveStatus === "failed" || autosaveStatus === "conflict" ? "alert" : "status"}
+          >
+            {autosaveStatus === "saving" ? <Loader2 aria-hidden="true" className="spinner" size={13} /> : null}
+            {autosaveStatus === "saved" ? <CheckCircle2 aria-hidden="true" size={13} /> : null}
+            {autosaveStatus === "offline" ? <CloudOff aria-hidden="true" size={13} /> : null}
+            {autosaveStatus === "conflict" || autosaveStatus === "failed" ? <AlertTriangle aria-hidden="true" size={13} /> : null}
+            {autosaveStatus === "idle" ? <Clock aria-hidden="true" size={13} /> : null}
+            {autosaveStatus === "saving"
+              ? "Saving…"
+              : autosaveStatus === "saved"
+                ? `Saved${lastSavedAt ? ` ${new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(new Date(lastSavedAt))}` : ""}`
+                : autosaveStatus === "offline"
+                  ? "Offline — keep this tab open"
+                  : autosaveStatus === "conflict"
+                    ? "Save conflict"
+                    : autosaveStatus === "failed"
+                      ? "Save failed"
+                      : isDirty
+                        ? "Changes pending"
+                        : "Ready"}
+          </span>
 
           <button
             className="btn-section-ai"
@@ -166,14 +258,39 @@ export function StructuredEditor() {
           </button>
           <button
             className="btn-primary-generate"
-            onClick={() => saveActiveLesson()}
+            disabled={autosaveStatus === "saving" || autosaveStatus === "conflict"}
+            onClick={() => void (autosaveStatus === "failed" ? retrySave() : saveActiveLesson())}
             style={{ padding: "8px 18px", fontSize: "12px" }}
             type="button"
           >
-            <Save size={14} /> Save Draft
+            {autosaveStatus === "saving" ? <Loader2 aria-hidden="true" className="spinner" size={14} /> : autosaveStatus === "failed" ? <RefreshCw aria-hidden="true" size={14} /> : <Save aria-hidden="true" size={14} />}
+            {autosaveStatus === "failed" ? "Retry save" : "Save now"}
           </button>
         </div>
       </div>
+
+      {autosaveStatus === "conflict" ? (
+        <section aria-labelledby="save-conflict-heading" className="save-conflict-panel" role="alert">
+          <AlertTriangle aria-hidden="true" size={20} />
+          <div>
+            <h2 id="save-conflict-heading">A newer version is already saved</h2>
+            <p>
+              This tab still has your changes. Review the remote save from{conflictRemote?.updatedAt ? ` ${new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(conflictRemote.updatedAt))}` : " another session"}, then choose which version to keep.
+            </p>
+          </div>
+          <div className="save-conflict-actions">
+            <button onClick={acceptRemoteVersion} type="button">Load newer version</button>
+            <button className="primary" onClick={() => void overwriteRemoteVersion()} type="button">
+              Keep my changes
+            </button>
+          </div>
+        </section>
+      ) : autosaveStatus === "failed" && saveError ? (
+        <div className="save-failure-banner" role="alert">
+          <span>{saveError} Your open changes were not discarded.</span>
+          <button onClick={() => void retrySave()} type="button">Try again</button>
+        </div>
+      ) : null}
 
       {/* Main Title Block */}
       <div className="lesson-create-title-block">
@@ -189,11 +306,38 @@ export function StructuredEditor() {
       </div>
 
       {/* Main Three-Column Editor Layout */}
-      <div className="editor-layout" style={{ gridTemplateColumns: "200px 1fr 300px" }}>
+      <div className="editor-layout">
         {/* Section Navigation Rail */}
         <nav className="section-nav-rail" aria-label="Section Navigation">
           <div className="rail-title">Lesson Sections</div>
           <ul className="rail-list">
+            <li>
+              <button
+                className={`rail-item-btn ${activeRailId === "section-pedagogy" ? "active" : ""}`}
+                onClick={() => handleSectionFocus("section-pedagogy", null)}
+                type="button"
+              >
+                <Brain aria-hidden="true" size={14} /> Pedagogy Tools
+              </button>
+            </li>
+            <li>
+              <button
+                className={`rail-item-btn ${activeRailId === "section-teacher-notes" ? "active" : ""}`}
+                onClick={() => handleSectionFocus("section-teacher-notes", null)}
+                type="button"
+              >
+                <LockKeyhole aria-hidden="true" size={14} /> Private Notes
+              </button>
+            </li>
+            <li>
+              <button
+                className={`rail-item-btn ${activeRailId === "section-references" ? "active" : ""}`}
+                onClick={() => handleSectionFocus("section-references", null)}
+                type="button"
+              >
+                <Paperclip aria-hidden="true" size={14} /> References
+              </button>
+            </li>
             <li>
               <button
                 className={`rail-item-btn ${activeRailId === "section-metadata" ? "active" : ""}`}
@@ -283,11 +427,44 @@ export function StructuredEditor() {
                   : secId === "section-reflection"
                   ? "reflection"
                   : null;
-              if (type) setSelectedSection(type as any);
+              if (type) setSelectedSection(type);
             }
           }}
           style={{ display: "grid", gap: "22px" }}
         >
+          <PedagogyTools />
+          <TeacherNotes
+            includeInExport={includePrivateNotesInExport}
+            notes={activeLesson.privateTeacherNotes ?? []}
+            onChange={(privateTeacherNotes) =>
+              updateActiveLesson((lesson) => ({ ...lesson, privateTeacherNotes }))
+            }
+            onIncludeInExportChange={setIncludePrivateNotesInExport}
+          />
+          <section
+            aria-labelledby="editor-reference-heading"
+            className="lesson-form-card"
+            id="section-references"
+          >
+            <div className="card-header">
+              <div className="card-icon violet">
+                <Paperclip aria-hidden="true" size={20} />
+              </div>
+              <div>
+                <h2 id="editor-reference-heading">Source References</h2>
+                <p>Inspect, remove, or add bounded source context for assistant edits.</p>
+              </div>
+            </div>
+            <div className="card-body">
+              <ReferenceUpload
+                onChange={(uploadedReferences) =>
+                  updateActiveLesson((lesson) => ({ ...lesson, uploadedReferences }))
+                }
+                onReferenceUploaded={() => undefined}
+                references={activeLesson.uploadedReferences ?? []}
+              />
+            </div>
+          </section>
           <MetadataSection
             lesson={activeLesson}
             onChange={(updated) => updateActiveLesson((prev) => ({ ...prev, ...updated }))}
@@ -329,10 +506,11 @@ export function StructuredEditor() {
         </Link>
         <button
           className="btn-primary-generate"
-          onClick={() => saveActiveLesson()}
+          disabled={autosaveStatus === "saving" || autosaveStatus === "conflict"}
+          onClick={() => void (autosaveStatus === "failed" ? retrySave() : saveActiveLesson())}
           type="button"
         >
-          <Sparkles size={16} /> Save All Changes
+          <Sparkles size={16} /> {autosaveStatus === "failed" ? "Retry save" : "Save all changes"}
         </button>
       </div>
     </div>

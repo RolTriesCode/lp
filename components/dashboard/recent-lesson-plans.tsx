@@ -13,10 +13,9 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useLessonStore } from "@/stores/lesson-store";
 import type { LessonPlan } from "@/schemas/lesson";
-import { mockLessonPlans } from "@/lib/mock-lessons";
 
 function LessonActions({ lesson, onOpen, onDuplicate, onDelete, onPack }: {
-  lesson: LessonPlan | any;
+  lesson: LessonPlan;
   onOpen: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -65,7 +64,7 @@ function LessonActions({ lesson, onOpen, onDuplicate, onDelete, onPack }: {
 
 export function RecentLessonPlans() {
   const router = useRouter();
-  const { lessonsList, listAllLessons, duplicateLesson, deleteLesson } = useLessonStore();
+  const { lessonsList, listAllLessons, duplicateLesson, deleteLesson, isLoading, errorState } = useLessonStore();
 
   useEffect(() => {
     listAllLessons();
@@ -80,13 +79,11 @@ export function RecentLessonPlans() {
 
   function handleDelete(id: string, title: string) {
     if (confirm(`Are you sure you want to delete "${title}"? This action cannot be undone.`)) {
-      deleteLesson(id);
+      void deleteLesson(id);
     }
   }
 
-  // Display top 5 most recent active lessons; fallback to mocks if empty
   const activeLessons = lessonsList.slice(0, 5);
-  const displayLessons = activeLessons.length > 0 ? activeLessons : null;
 
   return (
     <section className="recent panel">
@@ -106,8 +103,17 @@ export function RecentLessonPlans() {
           <span role="columnheader" aria-label="Actions" />
         </div>
 
-        {displayLessons ? (
-          displayLessons.map((lesson) => (
+        {isLoading ? (
+          <div className="plans-empty-row" role="row">
+            <span role="cell">Loading saved lessons…</span>
+          </div>
+        ) : errorState ? (
+          <div className="plans-empty-row error" role="row">
+            <span role="cell">{errorState}</span>
+            <button onClick={() => void listAllLessons()} type="button">Try again</button>
+          </div>
+        ) : activeLessons.length > 0 ? (
+          activeLessons.map((lesson) => (
             <div className="plans-row" key={lesson.id} role="row">
               <div className="plan-title" role="cell">
                 <div className="file-icon blue">
@@ -131,7 +137,7 @@ export function RecentLessonPlans() {
                 <span>{new Date(lesson.updatedAt || "").toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
               <div role="cell">
-                <span className="status draft">Local Draft</span>
+                <span className="status draft">Saved draft</span>
               </div>
               <div className="plan-actions-cell" role="cell">
                 <LessonActions
@@ -145,41 +151,9 @@ export function RecentLessonPlans() {
             </div>
           ))
         ) : (
-          mockLessonPlans.map((lesson) => (
-            <div className="plans-row" key={lesson.id} role="row">
-              <div className="plan-title" role="cell">
-                <div className={`file-icon ${lesson.tone}`}>
-                  <FilePenLine aria-hidden="true" size={16} />
-                </div>
-                <div>
-                  <strong>{lesson.title}</strong>
-                  <span>{lesson.lessonType}</span>
-                </div>
-              </div>
-              <div className="plan-secondary" role="cell">
-                {lesson.grade}<b>•</b>{lesson.subject}
-              </div>
-              <div role="cell">
-                <span className="curriculum">{lesson.curriculum}</span>
-              </div>
-              <div className="plan-date" role="cell">
-                <span>{lesson.updatedDate}</span>
-                <span>{lesson.updatedTime}</span>
-              </div>
-              <div role="cell">
-                <span className={`status ${lesson.status.toLowerCase()}`}>{lesson.status}</span>
-              </div>
-              <div className="plan-actions-cell" role="cell">
-                <button
-                  className="row-menu"
-                  type="button"
-                  onClick={() => alert("This is a demo mockup lesson. Create a new lesson to enable full editing actions.")}
-                >
-                  <MoreVertical size={16} />
-                </button>
-              </div>
-            </div>
-          ))
+          <div className="plans-empty-row" role="row">
+            <span role="cell">No saved lessons yet. Create a lesson to start your library.</span>
+          </div>
         )}
       </div>
     </section>

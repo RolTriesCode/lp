@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
+import { PDFParse } from "pdf-parse";
 import { generatePdfFile } from "../../lib/documents/pdf/renderer";
 import type { LessonPlan } from "../../schemas/lesson";
 
@@ -71,5 +72,35 @@ describe("PDF Document Exporter (`lib/documents/pdf/renderer.ts`)", () => {
 
     const signature = buffer.toString("utf-8", 0, 4);
     assert.strictEqual(signature, "%PDF");
+  });
+
+  it("excludes private teacher notes unless the teacher explicitly includes them", async () => {
+    const privateNoteText = "PRIVATE PDF EXPORT SENTINEL";
+    const lessonWithPrivateNotes: LessonPlan = {
+      ...sampleLesson,
+      privateTeacherNotes: [
+        {
+          id: "ec66464c-e1ca-4377-bde0-327393b53477",
+          section: "assessment",
+          text: privateNoteText,
+          createdAt: "2026-08-09T08:00:00.000Z",
+          updatedAt: "2026-08-09T08:00:00.000Z",
+        },
+      ],
+    };
+    const defaultBuffer = await generatePdfFile(lessonWithPrivateNotes);
+    const includedBuffer = await generatePdfFile(lessonWithPrivateNotes, { includePrivateNotes: true });
+
+    async function extractText(buffer: Buffer) {
+      const parser = new PDFParse({ data: new Uint8Array(buffer) });
+      try {
+        return (await parser.getText()).text;
+      } finally {
+        await parser.destroy();
+      }
+    }
+
+    assert.strictEqual((await extractText(defaultBuffer)).includes(privateNoteText), false);
+    assert.strictEqual((await extractText(includedBuffer)).includes(privateNoteText), true);
   });
 });

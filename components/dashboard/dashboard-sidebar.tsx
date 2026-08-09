@@ -14,6 +14,7 @@ import {
   Presentation,
   Settings,
   Target,
+  LibraryBig,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -22,7 +23,7 @@ import { SidebarActiveIndicator } from "./dashboard-motion";
 type SidebarItem = {
   label: string;
   icon: LucideIcon;
-  href?: string;
+  href: string;
   active?: boolean;
   accent?: string;
 };
@@ -54,27 +55,64 @@ export function getSidebarSections(currentPath: string = "/dashboard"): SidebarS
           href: "/lesson/create",
           active: currentPath.startsWith("/lesson/create"),
         },
-        { label: "Presentation Maker", icon: Presentation, accent: "#ff4f7b" },
-        { label: "Assessment Builder", icon: ClipboardCheck, accent: "#18c87a" },
-        { label: "Worksheet Generator", icon: FileCheck2, accent: "#ff9f1c" },
-        { label: "Rubric Builder", icon: Target, accent: "#9a71f7" },
+        { label: "Presentation Maker", icon: Presentation, accent: "#ff4f7b", href: "/presentations", active: currentPath.startsWith("/presentations") },
+        { label: "Assessment Builder", icon: ClipboardCheck, accent: "#18c87a", href: "/assessments", active: currentPath.startsWith("/assessments") },
+        { label: "Worksheet Generator", icon: FileCheck2, accent: "#ff9f1c", href: "/worksheets", active: currentPath.startsWith("/worksheets") },
+        { label: "Rubric Builder", icon: Target, accent: "#9a71f7", href: "/rubrics", active: currentPath.startsWith("/rubrics") },
       ],
     },
     {
       label: "MANAGE",
       items: [
-        { label: "My Lesson Plans", icon: Files },
-        { label: "Templates", icon: FolderOpen },
-        { label: "Resources", icon: BookOpen },
-        { label: "Calendar", icon: CalendarDays },
+        { label: "My Lesson Plans", icon: Files, href: "/lesson", active: currentPath === "/lesson" || /^\/lesson\/[^/]+$/.test(currentPath) },
+        {
+          label: "Templates",
+          icon: FolderOpen,
+          href: "/templates",
+          active: currentPath.startsWith("/templates"),
+        },
+        {
+          label: "Curriculum",
+          icon: LibraryBig,
+          href: "/curriculum",
+          active: currentPath.startsWith("/curriculum"),
+        },
+        {
+          label: "Resources",
+          icon: BookOpen,
+          href: "/resources",
+          active: currentPath.startsWith("/resources"),
+        },
+        {
+          label: "Calendar",
+          icon: CalendarDays,
+          href: "/calendar",
+          active: currentPath.startsWith("/calendar"),
+        },
       ],
     },
     {
       label: "SETTINGS",
       items: [
-        { label: "School & Profile", icon: GraduationCap },
-        { label: "Preferences", icon: Settings },
-        { label: "Help Center", icon: CircleHelp },
+        {
+          label: "School & Profile",
+          icon: GraduationCap,
+          href: "/settings/profile",
+          active: currentPath.startsWith("/settings/profile"),
+        },
+        {
+          label: "Classroom Context",
+          icon: Settings,
+          href: "/settings/classroom-context",
+          active: currentPath.startsWith("/settings/classroom-context"),
+        },
+        {
+          label: "Preferences",
+          icon: Settings,
+          href: "/settings/preferences",
+          active: currentPath.startsWith("/settings/preferences"),
+        },
+        { label: "Help Center", icon: CircleHelp, href: "/help", active: currentPath.startsWith("/help") },
       ],
     },
   ];
@@ -100,19 +138,15 @@ function NavigationItem({ item }: { item: SidebarItem }) {
     </>
   );
 
-  if (item.href) {
-    return (
-      <Link
-        aria-current={item.active ? "page" : undefined}
-        className={className}
-        href={item.href}
-      >
-        {content}
-      </Link>
-    );
-  }
-
-  return <button className={className} type="button">{content}</button>;
+  return (
+    <Link
+      aria-current={item.active ? "page" : undefined}
+      className={className}
+      href={item.href}
+    >
+      {content}
+    </Link>
+  );
 }
 
 export function SidebarNavigation({ currentPath = "/dashboard" }: { currentPath?: string }) {
@@ -145,9 +179,9 @@ function TemplatePromotion() {
       <div className="promo-art" aria-hidden="true">
         <PanelsTopLeft size={54} strokeWidth={1.25} />
       </div>
-      <button type="button">
+      <Link href="/templates">
         Explore Templates <ArrowRight aria-hidden="true" size={16} />
-      </button>
+      </Link>
     </div>
   );
 }

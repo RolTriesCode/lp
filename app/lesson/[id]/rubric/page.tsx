@@ -2,11 +2,12 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowDown, ArrowUp, Loader2, Plus, Save, Sparkles, Trash2, Printer } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Save, Sparkles, Trash2, Printer } from "lucide-react";
 import { useRubricStore } from "@/stores/rubric-store";
-import { getDraftLesson } from "@/lib/draft-store";
+import { defaultStorageAdapter } from "@/lib/persistence/remote-adapter";
 import type { LessonPlan } from "@/schemas/lesson";
 import "@/components/rubric/rubric.css";
+import { LinkedLessonUnavailable } from "@/components/library/library-states";
 
 type RubricPageProps = {
   params: Promise<{ id: string }>;
@@ -19,6 +20,7 @@ export default function RubricPage({ params }: RubricPageProps) {
   const [lesson, setLesson] = useState<LessonPlan | null>(null);
   const [taskDescription, setTaskDescription] = useState<string>("");
   const [levelsText, setLevelsText] = useState<string>("Excellent, Good, Basic");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const {
     activeRubric,
@@ -38,16 +40,18 @@ export default function RubricPage({ params }: RubricPageProps) {
 
   useEffect(() => {
     if (lessonId) {
-      const match = getDraftLesson(lessonId);
-      if (match) {
-        setLesson(match);
-        loadRubric(lessonId);
-      } else {
-        router.push("/dashboard");
-      }
+      void (async () => {
+        try {
+          const match = await defaultStorageAdapter.getLesson(lessonId);
+          if (!match) return setLoadError("The lesson may have been removed, or this account no longer has access to it.");
+          setLesson(match);
+          loadRubric(lessonId);
+        } catch { setLoadError("The lesson could not be reached. Try again from My Lesson Plans."); }
+      })();
     }
   }, [lessonId, loadRubric, router]);
 
+  if (loadError) return <LinkedLessonUnavailable message={loadError} />;
   if (!lesson) {
     return (
       <div className="fullscreen-loading">
@@ -58,7 +62,6 @@ export default function RubricPage({ params }: RubricPageProps) {
   }
 
   const activeCriterion = activeRubric?.criteria.find((c) => c.id === currentEditCriterionId) || null;
-  const activeCriterionIdx = activeRubric ? activeRubric.criteria.findIndex((c) => c.id === currentEditCriterionId) : -1;
 
   async function handleStartGeneration() {
     if (lesson && taskDescription) {

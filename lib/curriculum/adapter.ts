@@ -1,7 +1,8 @@
 import type { LessonPlanFormValues } from "@/lib/lesson-plan-schema";
 import { getCurriculumConfig } from "./config";
-import { getCurriculumProvenance } from "./lookup";
-import type { CurriculumContext } from "./types";
+import { getCurriculumProvenance, getVerifiedCurriculumRecordById } from "./lookup";
+import type { CurriculumContext, CurriculumRecord } from "./types";
+import { lessonPlanFormSchema } from "@/lib/lesson-plan-schema";
 
 /**
  * Assembles a structured CurriculumContext for AI model generation, server actions,
@@ -14,12 +15,33 @@ import type { CurriculumContext } from "./types";
  */
 export function assembleCurriculumContext(input: LessonPlanFormValues): CurriculumContext {
   const config = getCurriculumConfig(input.curriculum);
-  const provenance = getCurriculumProvenance(
-    input.curriculum,
-    `Grade ${input.grade}`,
-    input.subject,
-    input.topic
-  );
+  const exactRecord = input.curriculumRecordId
+    ? getVerifiedCurriculumRecordById(input.curriculumRecordId)
+    : undefined;
+  const exactRecordMatches = exactRecord
+    ? curriculumRecordMatchesLessonInput(exactRecord, input)
+    : false;
+  const provenance = input.curriculumRecordId
+    ? exactRecordMatches && exactRecord
+      ? {
+          sourceReference: exactRecord.sourceReference,
+          verificationStatus: exactRecord.verificationStatus,
+          isOfficialCode: exactRecord.isOfficialCode,
+          matchedRecord: exactRecord,
+        }
+      : {
+          sourceReference: "Teacher inputs changed after curriculum selection (unverified)",
+          verificationStatus: "UNVERIFIED_TEACHER_DRAFT" as const,
+          isOfficialCode: false,
+        }
+    : getCurriculumProvenance(
+        input.curriculum,
+        `Grade ${input.grade}`,
+        input.subject,
+        input.topic,
+        input.quarter,
+        input.competency
+      );
 
   let finalCompetencyText = input.competency?.trim() || "";
   let finalCompetencyCode = "";
@@ -56,4 +78,44 @@ export function assembleCurriculumContext(input: LessonPlanFormValues): Curricul
     isOfficialCode,
     valuesIntegrationRequired: config.requiresValuesIntegration,
   };
+}
+
+export function applyVerifiedCurriculumRecord(
+  current: LessonPlanFormValues,
+  record: CurriculumRecord
+): LessonPlanFormValues {
+  if (record.verificationStatus === "UNVERIFIED_TEACHER_DRAFT") {
+    throw new Error("Only verified curriculum records can populate lesson inputs.");
+  }
+
+  return lessonPlanFormSchema.parse({
+    ...current,
+    curriculumRecordId: record.id,
+    curriculum: record.curriculum,
+    grade: record.gradeLevel.replace(/^Grade\s+/i, ""),
+    subject: record.subject,
+    quarter: record.quarter,
+    topic: record.topic,
+    competency: record.competencyText,
+  });
+}
+
+function normalized(value: string | undefined): string {
+  return (value ?? "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
+}
+
+export function curriculumRecordMatchesLessonInput(
+  record: CurriculumRecord,
+  input: LessonPlanFormValues
+): boolean {
+  const competency = normalized(input.competency);
+  return (
+    record.verificationStatus !== "UNVERIFIED_TEACHER_DRAFT" &&
+    record.curriculum === input.curriculum &&
+    normalized(record.gradeLevel) === normalized(`Grade ${input.grade}`) &&
+    normalized(record.subject) === normalized(input.subject) &&
+    normalized(record.quarter) === normalized(input.quarter) &&
+    normalized(record.topic) === normalized(input.topic) &&
+    (competency === "" || competency === normalized(record.competencyText))
+  );
 }

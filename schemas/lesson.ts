@@ -1,4 +1,11 @@
 import { z } from "zod";
+import { UploadedReferenceListSchema } from "@/schemas/reference";
+import { ClassroomContextApplicationSchema } from "@/schemas/classroom-context";
+import {
+  CurriculumProvenanceSnapshotSchema,
+  LessonPedagogySchema,
+  PrivateTeacherNoteSchema,
+} from "@/schemas/pedagogy";
 
 /**
  * Version identifier for schema compatibility and database migration support.
@@ -133,6 +140,11 @@ export const LessonPlanSchema = z.object({
   assessment: z.array(AssessmentItemSchema).optional().default([]),
   assignment: z.string().trim().max(2000).optional().default(""),
   reflection: z.string().trim().max(2000).optional().default(""),
+  uploadedReferences: UploadedReferenceListSchema.optional(),
+  classroomContext: ClassroomContextApplicationSchema.optional(),
+  curriculumProvenance: CurriculumProvenanceSnapshotSchema.optional(),
+  pedagogy: LessonPedagogySchema.optional(),
+  privateTeacherNotes: z.array(PrivateTeacherNoteSchema).max(50).optional(),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });
@@ -197,6 +209,11 @@ export function normalizeLessonPlan(data: unknown): LessonPlan {
     schemaVersion: raw.schemaVersion || LESSON_SCHEMA_VERSION,
     procedures,
     assessment,
+    uploadedReferences: Array.isArray(raw.uploadedReferences) ? raw.uploadedReferences : [],
+    classroomContext: raw.classroomContext,
+    curriculumProvenance: raw.curriculumProvenance,
+    pedagogy: raw.pedagogy ?? { bloomTargets: ["understand", "apply"], differentiation: [] },
+    privateTeacherNotes: Array.isArray(raw.privateTeacherNotes) ? raw.privateTeacherNotes : [],
   };
 
   return LessonPlanSchema.parse(normalized);

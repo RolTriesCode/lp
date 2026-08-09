@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { UploadedReferenceListSchema } from "@/schemas/reference";
 
 export const curriculumValues = ["MATATAG", "ILAW"] as const;
 export const gradeValues = ["7", "8", "9", "10", "1", "2", "3", "4", "5", "6", "11", "12", "Kindergarten"] as const;
@@ -114,6 +115,7 @@ export const languageOptions = [
 ] as const;
 
 export const lessonPlanFormSchema = z.object({
+  curriculumRecordId: z.string().trim().min(1).max(120).optional(),
   curriculum: z.enum(curriculumValues),
   grade: z.enum(gradeValues),
   subject: z.enum(subjectValues),
@@ -130,6 +132,7 @@ export const lessonPlanFormSchema = z.object({
   resources: z.enum(resourceValues),
   language: z.enum(languageValues),
   instructions: z.string().trim().max(500, "Keep instructions under 500 characters.").optional(),
+  uploadedReferences: UploadedReferenceListSchema.optional(),
 });
 
 export type LessonPlanFormValues = z.infer<typeof lessonPlanFormSchema>;
@@ -147,6 +150,7 @@ export const lessonPlanDefaults: LessonPlanFormValues = {
   resources: "projector",
   language: "english",
   instructions: "",
+  uploadedReferences: [],
 };
 
 export function toLessonPlanSearchParams(values: Partial<LessonPlanFormValues>) {
@@ -195,6 +199,7 @@ export function parseLessonPlanSearchParams(searchParams: RawSearchParams): Less
     resources: isEnumValue(resourceValues, rawResources) ? rawResources : lessonPlanDefaults.resources,
     language: isEnumValue(languageValues, rawLanguage) ? rawLanguage : lessonPlanDefaults.language,
     instructions: rawInstructions ? rawInstructions.slice(0, 500) : "",
+    uploadedReferences: [],
   };
 
   const parsed = lessonPlanFormSchema.safeParse(candidate);

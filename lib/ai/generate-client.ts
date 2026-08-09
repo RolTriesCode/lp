@@ -1,12 +1,11 @@
-import type { GenerateLessonResult } from "@/lib/ai/generate-lesson";
-import type { LessonPlanFormValues } from "@/lib/lesson-plan-schema";
+import type { GenerateLessonInput, GenerateLessonResult } from "@/lib/ai/generate-lesson";
 
 /**
  * Client-side helper to post lesson generation request to /api/ai/lesson.
  * Supports cancellation via AbortSignal.
  */
 export async function requestLessonGeneration(
-  input: LessonPlanFormValues,
+  input: GenerateLessonInput,
   signal?: AbortSignal
 ): Promise<GenerateLessonResult> {
   try {

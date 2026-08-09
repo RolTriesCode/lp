@@ -47,7 +47,19 @@ export class LocalStorageAdapter implements ILessonStorageAdapter {
     return null;
   }
 
-  async saveLesson(lesson: LessonPlan): Promise<void> {
+  async createLesson(lesson: LessonPlan): Promise<LessonPlan> {
+    const id = lesson.id || `lesson-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
+    const normalized = normalizeLessonPlan({
+      ...lesson,
+      id,
+      createdAt: lesson.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    await this.saveLesson(normalized);
+    return normalized;
+  }
+
+  async saveLesson(lesson: LessonPlan): Promise<LessonPlan> {
     const id = lesson.id || `lesson-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 7)}`;
     const normalized = normalizeLessonPlan({
       ...lesson,
@@ -67,6 +79,20 @@ export class LocalStorageAdapter implements ILessonStorageAdapter {
         console.error("[StorageAdapter] Failed to save draft:", err);
       }
     }
+
+    return normalized;
+  }
+
+  async duplicateLesson(id: string): Promise<LessonPlan | null> {
+    const original = await this.getLesson(id);
+    if (!original) return null;
+    return this.createLesson({
+      ...original,
+      id: undefined,
+      title: `${original.title} (Copy)`.slice(0, 200),
+      createdAt: undefined,
+      updatedAt: undefined,
+    });
   }
 
   async deleteLesson(id: string): Promise<void> {
@@ -118,5 +144,3 @@ export class LocalStorageAdapter implements ILessonStorageAdapter {
     );
   }
 }
-
-export const defaultStorageAdapter = new LocalStorageAdapter();

@@ -20,6 +20,7 @@ export function LessonPlanComposer() {
   const [isNavigating, setIsNavigating] = useState(false);
   const {
     control,
+    getValues,
     register,
     handleSubmit,
     formState: { errors },
@@ -34,6 +35,11 @@ export function LessonPlanComposer() {
     setIsNavigating(true);
     const searchParams = toLessonPlanSearchParams(values);
     router.push(`/lesson/create?${searchParams.toString()}`);
+  }
+
+  function openGeneratorSection(hash: string) {
+    const searchParams = toLessonPlanSearchParams(getValues());
+    router.push(`/lesson/create?${searchParams.toString()}#${hash}`);
   }
 
   return (
@@ -83,9 +89,9 @@ export function LessonPlanComposer() {
       </div>
       <div className="composer-actions">
         <div className="secondary-actions">
-          <button type="button"><SlidersHorizontal size={16} /> Add more details</button>
-          <button type="button"><Paperclip size={17} /> Attach reference</button>
-          <button type="button"><Settings size={16} /> Advanced settings</button>
+          <button onClick={() => openGeneratorSection("heading-scope")} type="button"><SlidersHorizontal size={16} /> Add more details</button>
+          <button onClick={() => openGeneratorSection("heading-references")} type="button"><Paperclip size={17} /> Attach reference</button>
+          <button onClick={() => openGeneratorSection("heading-instructions")} type="button"><Settings size={16} /> Advanced settings</button>
         </div>
         <button className="generate-button" disabled={isNavigating} type="submit">
           {isNavigating ? "Opening Generator…" : "Generate Lesson Plan"}

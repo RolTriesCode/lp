@@ -12,9 +12,23 @@ import {
   TextRun,
   WidthType,
   HeadingLevel,
-  BorderStyle,
 } from "docx";
 import type { LessonPlan } from "@/schemas/lesson";
+
+export type LessonExportProfile = {
+  teacherName?: string | null;
+  schoolName?: string | null;
+  roleTitle?: string | null;
+};
+
+export type LessonExportOptions = {
+  includePrivateNotes?: boolean;
+};
+
+function safeMetadataText(value: string | null | undefined, fallback: string, maximum: number): string {
+  const clean = value?.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
+  return clean ? clean.slice(0, maximum) : fallback;
+}
 
 /**
  * Strips HTML tags to return plain text for docx.
@@ -27,8 +41,15 @@ function stripHtml(html: string): string {
 /**
  * Generates a formal DepEd lesson plan Word document stream.
  */
-export async function generateDocxFile(lesson: LessonPlan): Promise<Buffer> {
+export async function generateDocxFile(
+  lesson: LessonPlan,
+  profile: LessonExportProfile = {},
+  options: LessonExportOptions = {}
+): Promise<Buffer> {
   const isDetailed = lesson.lessonType === "DETAILED";
+  const teacherName = safeMetadataText(profile.teacherName, "Teacher", 120);
+  const schoolName = safeMetadataText(profile.schoolName, "School not specified", 180);
+  const roleTitle = safeMetadataText(profile.roleTitle, "Teacher", 80);
 
   // 1. Create a metadata header table (School, Teacher, Grade, Subject, Date, Quarter)
   const headerTable = new Table({
@@ -45,7 +66,7 @@ export async function generateDocxFile(lesson: LessonPlan): Promise<Buffer> {
               new Paragraph({
                 children: [
                   new TextRun({ text: "School Name: ", bold: true }),
-                  new TextRun({ text: "DepEd Division Prototype School" }),
+                  new TextRun({ text: schoolName }),
                 ],
               }),
             ],
@@ -71,7 +92,7 @@ export async function generateDocxFile(lesson: LessonPlan): Promise<Buffer> {
               new Paragraph({
                 children: [
                   new TextRun({ text: "Teacher Name: ", bold: true }),
-                  new TextRun({ text: "DepEd Master Teacher Prototype" }),
+                  new TextRun({ text: `${teacherName} · ${roleTitle}` }),
                 ],
               }),
             ],
@@ -118,7 +139,7 @@ export async function generateDocxFile(lesson: LessonPlan): Promise<Buffer> {
     ],
   });
 
-  const childrenElements: any[] = [
+  const childrenElements: Array<Paragraph | Table> = [
     new Paragraph({
       text: `${lesson.curriculum} LESSON PLAN`,
       heading: HeadingLevel.HEADING_1,
@@ -388,6 +409,26 @@ export async function generateDocxFile(lesson: LessonPlan): Promise<Buffer> {
         spacing: { after: 60 },
       })
     );
+  }
+
+  if (options.includePrivateNotes && lesson.privateTeacherNotes?.some((note) => note.text.trim())) {
+    childrenElements.push(
+      new Paragraph({
+        children: [new TextRun({ text: "PRIVATE TEACHER NOTES", bold: true, size: 24 })],
+        spacing: { before: 240, after: 120 },
+      })
+    );
+    lesson.privateTeacherNotes.filter((note) => note.text.trim()).forEach((note) => {
+      childrenElements.push(
+        new Paragraph({
+          children: [
+            new TextRun({ text: `${note.section}: `, bold: true }),
+            new TextRun({ text: note.text }),
+          ],
+          spacing: { after: 60 },
+        })
+      );
+    });
   }
 
   // Packer generates document stream

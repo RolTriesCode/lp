@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getDraftAssessment, saveDraftAssessment } from "@/lib/draft-store";
+import { SupabaseArtifactRepository } from "@/lib/persistence/artifact-repository";
 import { AssessmentSchema, type Assessment, type AssessmentItem, type AssessmentItemType } from "@/schemas/assessment";
 import type { LessonPlan } from "@/schemas/lesson";
 
@@ -11,7 +11,7 @@ export type AssessmentState = {
   currentEditItemId: string | null;
 
   // Actions
-  loadAssessment: (lessonId: string) => void;
+  loadAssessment: (lessonId: string) => Promise<void>;
   generateAssessmentFromLesson: (
     lesson: LessonPlan,
     itemTypes: AssessmentItemType[],
@@ -23,10 +23,15 @@ export type AssessmentState = {
   reorderItems: (from: number, to: number) => void;
   addItem: (type: AssessmentItemType) => void;
   removeItem: (itemId: string) => void;
-  saveAssessment: () => void;
+  saveAssessment: () => Promise<void>;
   setCurrentEditItemId: (id: string | null) => void;
   clearError: () => void;
 };
+
+const assessmentRepository = new SupabaseArtifactRepository(
+  "assessments",
+  AssessmentSchema
+);
 
 export const useAssessmentStore = create<AssessmentState>((set, get) => ({
   activeAssessment: null,
@@ -35,11 +40,11 @@ export const useAssessmentStore = create<AssessmentState>((set, get) => ({
   errorState: null,
   currentEditItemId: null,
 
-  loadAssessment: (lessonId: string) => {
+  loadAssessment: async (lessonId: string) => {
     if (!lessonId) return;
 
     try {
-      const draft = getDraftAssessment(lessonId);
+      const draft = await assessmentRepository.getForLesson(lessonId);
       if (draft) {
         set({
           activeAssessment: draft,
@@ -50,8 +55,11 @@ export const useAssessmentStore = create<AssessmentState>((set, get) => ({
       } else {
         set({ activeAssessment: null, isDirty: false, errorState: null });
       }
-    } catch {
-      set({ activeAssessment: null, errorState: "Failed to load assessment draft." });
+    } catch (error) {
+      set({
+        activeAssessment: null,
+        errorState: error instanceof Error ? error.message : "Failed to load the saved assessment.",
+      });
     }
   },
 
@@ -75,9 +83,9 @@ export const useAssessmentStore = create<AssessmentState>((set, get) => ({
 
       if (resData.success) {
         const parsed = AssessmentSchema.parse(resData.data);
-        saveDraftAssessment(parsed);
+        const saved = await assessmentRepository.save(parsed);
         set({
-          activeAssessment: parsed,
+          activeAssessment: saved,
           currentEditItemId: parsed.items[0]?.id || null,
           isLoading: false,
           isDirty: false,
@@ -193,12 +201,19 @@ export const useAssessmentStore = create<AssessmentState>((set, get) => ({
     });
   },
 
-  saveAssessment: () => {
+  saveAssessment: async () => {
     const current = get().activeAssessment;
     if (!current) return;
 
-    saveDraftAssessment(current);
-    set({ isDirty: false });
+    try {
+      const saved = await assessmentRepository.save(current);
+      set({ activeAssessment: saved, isDirty: false, errorState: null });
+    } catch (error) {
+      set({
+        isDirty: true,
+        errorState: error instanceof Error ? error.message : "The assessment could not be saved.",
+      });
+    }
   },
 
   setCurrentEditItemId: (id: string | null) => {

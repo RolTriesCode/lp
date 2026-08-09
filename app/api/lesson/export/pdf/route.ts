@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { generatePdfFile } from "@/lib/documents/pdf/renderer";
-import { safeParseLessonPlan } from "@/schemas/lesson";
+import { LessonExportRequestSchema } from "@/schemas/lesson-export";
+import { captureMonitoringException } from "@/lib/monitoring/sentry";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const parsed = safeParseLessonPlan(body);
+    const parsed = LessonExportRequestSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json(
@@ -21,10 +22,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const pdfBuffer = await generatePdfFile(parsed.data);
+    const pdfBuffer = await generatePdfFile(parsed.data.lesson, {
+      includePrivateNotes: parsed.data.includePrivateNotes,
+    });
 
     // Create safe clean filename
-    const cleanTitle = parsed.data.title.replace(/[^a-zA-Z0-9-_]/g, "_") || "lesson_plan";
+    const cleanTitle = parsed.data.lesson.title.replace(/[^a-zA-Z0-9-_]/g, "_") || "lesson_plan";
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
@@ -33,13 +36,15 @@ export async function POST(request: Request) {
         "Content-Disposition": `attachment; filename="${cleanTitle}.pdf"`,
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    captureMonitoringException(err, { area: "lesson_export", category: "UPSTREAM_FAILURE" });
+    const message = err instanceof Error ? err.message : "Failed to generate PDF document stream.";
     return NextResponse.json(
       {
         success: false,
         error: {
           category: "UPSTREAM_FAILURE",
-          message: err.message || "Failed to generate PDF document stream.",
+          message,
           retryable: true,
         },
       },

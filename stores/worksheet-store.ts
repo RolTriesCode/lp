@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getDraftWorksheet, saveDraftWorksheet } from "@/lib/draft-store";
+import { SupabaseArtifactRepository } from "@/lib/persistence/artifact-repository";
 import { WorksheetSchema, type Worksheet, type WorksheetItem } from "@/schemas/worksheet";
 import type { LessonPlan } from "@/schemas/lesson";
 
@@ -11,7 +11,7 @@ export type WorksheetState = {
   currentEditItemId: string | null;
 
   // Actions
-  loadWorksheet: (lessonId: string) => void;
+  loadWorksheet: (lessonId: string) => Promise<void>;
   generateWorksheetFromLesson: (
     lesson: LessonPlan,
     difficulty: "easy" | "average" | "difficult",
@@ -22,10 +22,15 @@ export type WorksheetState = {
   reorderItems: (from: number, to: number) => void;
   addItem: () => void;
   removeItem: (itemId: string) => void;
-  saveWorksheet: () => void;
+  saveWorksheet: () => Promise<void>;
   setCurrentEditItemId: (id: string | null) => void;
   clearError: () => void;
 };
+
+const worksheetRepository = new SupabaseArtifactRepository(
+  "worksheets",
+  WorksheetSchema
+);
 
 export const useWorksheetStore = create<WorksheetState>((set, get) => ({
   activeWorksheet: null,
@@ -34,11 +39,11 @@ export const useWorksheetStore = create<WorksheetState>((set, get) => ({
   errorState: null,
   currentEditItemId: null,
 
-  loadWorksheet: (lessonId: string) => {
+  loadWorksheet: async (lessonId: string) => {
     if (!lessonId) return;
 
     try {
-      const draft = getDraftWorksheet(lessonId);
+      const draft = await worksheetRepository.getForLesson(lessonId);
       if (draft) {
         set({
           activeWorksheet: draft,
@@ -49,8 +54,11 @@ export const useWorksheetStore = create<WorksheetState>((set, get) => ({
       } else {
         set({ activeWorksheet: null, isDirty: false, errorState: null });
       }
-    } catch {
-      set({ activeWorksheet: null, errorState: "Failed to load worksheet draft." });
+    } catch (error) {
+      set({
+        activeWorksheet: null,
+        errorState: error instanceof Error ? error.message : "Failed to load the saved worksheet.",
+      });
     }
   },
 
@@ -73,9 +81,9 @@ export const useWorksheetStore = create<WorksheetState>((set, get) => ({
 
       if (resData.success) {
         const parsed = WorksheetSchema.parse(resData.data);
-        saveDraftWorksheet(parsed);
+        const saved = await worksheetRepository.save(parsed);
         set({
-          activeWorksheet: parsed,
+          activeWorksheet: saved,
           currentEditItemId: parsed.items[0]?.id || null,
           isLoading: false,
           isDirty: false,
@@ -189,12 +197,19 @@ export const useWorksheetStore = create<WorksheetState>((set, get) => ({
     });
   },
 
-  saveWorksheet: () => {
+  saveWorksheet: async () => {
     const current = get().activeWorksheet;
     if (!current) return;
 
-    saveDraftWorksheet(current);
-    set({ isDirty: false });
+    try {
+      const saved = await worksheetRepository.save(current);
+      set({ activeWorksheet: saved, isDirty: false, errorState: null });
+    } catch (error) {
+      set({
+        isDirty: true,
+        errorState: error instanceof Error ? error.message : "The worksheet could not be saved.",
+      });
+    }
   },
 
   setCurrentEditItemId: (id: string | null) => {

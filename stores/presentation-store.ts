@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getDraftPresentation, saveDraftPresentation } from "@/lib/draft-store";
+import { SupabaseArtifactRepository } from "@/lib/persistence/artifact-repository";
 import { PresentationSchema, type Presentation, type PresentationTheme, type Slide } from "@/schemas/presentation";
 import type { LessonPlan } from "@/schemas/lesson";
 
@@ -11,16 +11,21 @@ export type PresentationState = {
   errorState: string | null;
 
   // Actions
-  loadPresentation: (lessonId: string) => void;
+  loadPresentation: (lessonId: string) => Promise<void>;
   generatePresentationFromLesson: (lesson: LessonPlan, theme: PresentationTheme) => Promise<void>;
   updateSlide: (index: number, updated: Partial<Slide>) => void;
   reorderSlides: (from: number, to: number) => void;
   addSlide: (index: number) => void;
   removeSlide: (index: number) => void;
-  savePresentation: () => void;
+  savePresentation: () => Promise<void>;
   setCurrentSlideIndex: (idx: number) => void;
   clearError: () => void;
 };
+
+const presentationRepository = new SupabaseArtifactRepository(
+  "presentations",
+  PresentationSchema
+);
 
 export const usePresentationStore = create<PresentationState>((set, get) => ({
   activePresentation: null,
@@ -29,11 +34,11 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   isDirty: false,
   errorState: null,
 
-  loadPresentation: (lessonId: string) => {
+  loadPresentation: async (lessonId: string) => {
     if (!lessonId) return;
 
     try {
-      const draft = getDraftPresentation(lessonId);
+      const draft = await presentationRepository.getForLesson(lessonId);
       if (draft) {
         set({
           activePresentation: draft,
@@ -44,8 +49,11 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
       } else {
         set({ activePresentation: null, isDirty: false, errorState: null });
       }
-    } catch (err) {
-      set({ activePresentation: null, errorState: "Failed to load presentation draft." });
+    } catch (error) {
+      set({
+        activePresentation: null,
+        errorState: error instanceof Error ? error.message : "Failed to load the saved presentation.",
+      });
     }
   },
 
@@ -63,9 +71,9 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
 
       if (resData.success) {
         const parsed = PresentationSchema.parse(resData.data);
-        saveDraftPresentation(parsed);
+        const saved = await presentationRepository.save(parsed);
         set({
-          activePresentation: parsed,
+          activePresentation: saved,
           currentSlideIndex: 0,
           isLoading: false,
           isDirty: false,
@@ -181,12 +189,19 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
     });
   },
 
-  savePresentation: () => {
+  savePresentation: async () => {
     const current = get().activePresentation;
     if (!current) return;
 
-    saveDraftPresentation(current);
-    set({ isDirty: false });
+    try {
+      const saved = await presentationRepository.save(current);
+      set({ activePresentation: saved, isDirty: false, errorState: null });
+    } catch (error) {
+      set({
+        isDirty: true,
+        errorState: error instanceof Error ? error.message : "The presentation could not be saved.",
+      });
+    }
   },
 
   setCurrentSlideIndex: (idx: number) => {

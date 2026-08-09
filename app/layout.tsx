@@ -3,6 +3,13 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "../components/dashboard/dashboard.css";
 import "../components/lesson/lesson-create.css";
+import "../components/library/library.css";
+import "../components/auth/auth.css";
+import "../components/profile/profile.css";
+import "../components/calendar/calendar.css";
+import "../components/classroom-context/classroom-context.css";
+import "../components/presentation-mode/teaching-mode.css";
+import { ProductObservability } from "@/components/monitoring/product-observability";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,7 +32,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        <ProductObservability />
+      </body>
     </html>
   );
 }
